@@ -35,7 +35,7 @@ class Residual(nn.Module):
         in_planes=64,
         hidden_planes=128,
         normalize=nn.BatchNorm2d,
-        nonlinearity=nn.GELU,  # nn.LeakyReLU,
+        nonlinearity=nn.LeakyReLU,
         dropout=0.0,
     ):
         super(Residual, self).__init__()
@@ -55,13 +55,29 @@ class Residual(nn.Module):
 
 
 class ResidualStack(nn.Module):
-    def __init__(self, num_layers=3, latent_dim=64, hidden_dim=128, dropout=0.0):
+    def __init__(
+        self,
+        num_layers=3,
+        latent_dim=64,
+        hidden_dim=128,
+        dropout=0.0,
+        normalize=nn.BatchNorm2d,
+        nonlinearity=nn.LeakyReLU,
+    ):
         super(ResidualStack, self).__init__()
         self.num_layers = num_layers
 
         layers = []
         for _ in range(num_layers):
-            layers.append(Residual(latent_dim, hidden_dim, dropout=dropout))
+            layers.append(
+                Residual(
+                    latent_dim,
+                    hidden_dim,
+                    dropout=dropout,
+                    normalize=normalize,
+                    nonlinearity=nonlinearity,
+                )
+            )
         self._stack = nn.Sequential(*layers)
 
     def forward(self, x):
@@ -77,14 +93,19 @@ class ConvNet(nn.Module):
         num_layers=3,
         hidden_dim=128,
         dropout=0.0,
+        normalize=nn.BatchNorm2d,
+        nonlinearity=nn.LeakyReLU,
     ):
         super(ConvNet, self).__init__()
         self.conv0 = conv1x1(in_planes=in_planes, out_planes=latent_dim, bias=True)
+        self.act0 = nonlinearity()
         self.residual_stack = ResidualStack(
             num_layers=num_layers,
             latent_dim=latent_dim,
             hidden_dim=hidden_dim,
             dropout=dropout,
+            normalize=normalize,
+            nonlinearity=nonlinearity,
         )
         self.output_projection = conv1x1(
             in_planes=latent_dim, out_planes=out_planes, bias=True
@@ -92,7 +113,7 @@ class ConvNet(nn.Module):
 
     def forward(self, x):
         x = self.conv0(x)
-        x = F.leaky_relu(x, inplace=True)
+        x = self.act0(x)
         x = self.residual_stack(x)
         x = self.output_projection(x)
         return x
@@ -107,6 +128,8 @@ def conv_solve(
     latent_dim=64,
     hidden_dim=128,
     dropout=0.0,
+    normalize="BatchNorm",
+    nonlinearity="GELU",
 ):
     train_pairs = riddle.train
 
@@ -115,6 +138,22 @@ def conv_solve(
     inputs = [torch.from_numpy(bp.input.as_np).to(device) for bp in train_pairs]
     targets = [torch.from_numpy(bp.output.as_np).to(device) for bp in train_pairs]
 
+    if normalize == "BatchNorm":
+        normalize = nn.BatchNorm2d
+    elif normalize == "InstanceNorm":
+        normalize = nn.InstanceNorm2d
+    else:
+        raise RuntimeError("Unsuppoted normalize parameter")
+
+    if nonlinearity == "GELU":
+        nonlinearity = nn.GELU
+    elif nonlinearity == "ReLU":
+        nonlinearity = nn.ReLU
+    elif nonlinearity == "LeakyReLU":
+        nonlinearity = nn.LeakyReLU
+    else:
+        raise RuntimeError("Unsuppoted nonlinearity parameter")
+
     model = ConvNet(
         in_planes=10,
         out_planes=10,
@@ -122,6 +161,8 @@ def conv_solve(
         num_layers=num_layers,
         hidden_dim=hidden_dim,
         dropout=dropout,
+        normalize=normalize,
+        nonlinearity=nonlinearity,
     )
 
     model.to(device)
@@ -276,6 +317,39 @@ def main():
             latent_dim=256,
             hidden_dim=512,
             dropout=0.8,
+        ),
+        dict(
+            max_steps=500,
+            lr=1e-4,
+            weight_decay=0.1,
+            num_layers=1,
+            latent_dim=64,
+            hidden_dim=128,
+            dropout=0.0,
+            normalize="InstanceNorm",
+            nonlinearity="LeakyReLU",
+        ),
+        dict(
+            max_steps=500,
+            lr=1e-4,
+            weight_decay=0.1,
+            num_layers=1,
+            latent_dim=64,
+            hidden_dim=128,
+            dropout=0.0,
+            normalize="InstanceNorm",
+            nonlinearity="LeakyReLU",
+        ),
+        dict(
+            max_steps=500,
+            lr=1e-4,
+            weight_decay=0.1,
+            num_layers=2,
+            latent_dim=64,
+            hidden_dim=128,
+            dropout=0.0,
+            normalize="InstanceNorm",
+            nonlinearity="LeakyReLU",
         ),
     ]
 
