@@ -1,4 +1,5 @@
 import numpy as np
+import tqdm
 
 import torch
 import torch.nn as nn
@@ -78,14 +79,16 @@ class ConvNet(nn.Module):
         dropout=0.0,
     ):
         super(ConvNet, self).__init__()
-        self.conv0 = conv1x1(in_planes=in_planes, out_planes=latent_dim)
+        self.conv0 = conv1x1(in_planes=in_planes, out_planes=latent_dim, bias=True)
         self.residual_stack = ResidualStack(
             num_layers=num_layers,
             latent_dim=latent_dim,
             hidden_dim=hidden_dim,
             dropout=dropout,
         )
-        self.output_projection = conv1x1(in_planes=latent_dim, out_planes=out_planes)
+        self.output_projection = conv1x1(
+            in_planes=latent_dim, out_planes=out_planes, bias=True
+        )
 
     def forward(self, x):
         x = self.conv0(x)
@@ -103,12 +106,14 @@ def conv_solve(
     num_layers=2,
     latent_dim=64,
     hidden_dim=128,
-    dropout=.0
+    dropout=0.0,
 ):
     train_pairs = riddle.train
 
-    inputs = [torch.from_numpy(bp.input.as_np) for bp in train_pairs]
-    targets = [torch.from_numpy(bp.output.as_np) for bp in train_pairs]
+    device = torch.device("cpu", 0)
+
+    inputs = [torch.from_numpy(bp.input.as_np).to(device) for bp in train_pairs]
+    targets = [torch.from_numpy(bp.output.as_np).to(device) for bp in train_pairs]
 
     model = ConvNet(
         in_planes=10,
@@ -116,8 +121,11 @@ def conv_solve(
         latent_dim=latent_dim,
         num_layers=num_layers,
         hidden_dim=hidden_dim,
-        dropout=dropout
+        dropout=dropout,
     )
+
+    model.to(device)
+
     optimizer = optim.AdamW(
         model.parameters(),
         lr=lr,
@@ -149,8 +157,8 @@ def conv_solve(
 
     # eval on test
     test_pairs = riddle.test
-    inputs = [torch.from_numpy(bp.input.as_np) for bp in test_pairs]
-    targets = [torch.from_numpy(bp.output.as_np) for bp in test_pairs]
+    inputs = [torch.from_numpy(bp.input.as_np).to(device) for bp in test_pairs]
+    targets = [torch.from_numpy(bp.output.as_np).to(device) for bp in test_pairs]
 
     with torch.no_grad():
         model.eval()
@@ -162,7 +170,7 @@ def conv_solve(
         y = model.forward(x)
 
         y = torch.argmax(y, dim=1, keepdim=False)
-        correct = torch.count_nonzero(y == target)
+        # correct = torch.count_nonzero(y == target)
         # print(riddle.riddle_id, correct / y.numel(), torch.all(y == target))
         return torch.all(y == target), y
 
@@ -177,7 +185,7 @@ def main():
             num_layers=1,
             latent_dim=32,
             hidden_dim=64,
-            dropout=.0
+            dropout=0.0,
         ),
         dict(
             max_steps=250,
@@ -186,7 +194,7 @@ def main():
             num_layers=2,
             latent_dim=32,
             hidden_dim=64,
-            dropout=.2
+            dropout=0.2,
         ),
         dict(
             max_steps=500,
@@ -195,7 +203,7 @@ def main():
             num_layers=1,
             latent_dim=64,
             hidden_dim=128,
-            dropout=.0
+            dropout=0.0,
         ),
         dict(
             max_steps=100,
@@ -204,7 +212,7 @@ def main():
             num_layers=2,
             latent_dim=64,
             hidden_dim=128,
-            dropout=.0
+            dropout=0.0,
         ),
         dict(
             max_steps=500,
@@ -213,7 +221,7 @@ def main():
             num_layers=2,
             latent_dim=64,
             hidden_dim=128,
-            dropout=.0
+            dropout=0.0,
         ),
         dict(
             max_steps=2500,
@@ -222,7 +230,7 @@ def main():
             num_layers=2,
             latent_dim=64,
             hidden_dim=128,
-            dropout=.5
+            dropout=0.5,
         ),
         dict(
             max_steps=1000,
@@ -231,7 +239,7 @@ def main():
             num_layers=3,
             latent_dim=64,
             hidden_dim=128,
-            dropout=.0
+            dropout=0.0,
         ),
         dict(
             max_steps=1000,
@@ -240,7 +248,7 @@ def main():
             num_layers=3,
             latent_dim=64,
             hidden_dim=128,
-            dropout=.5
+            dropout=0.5,
         ),
         dict(
             max_steps=2000,
@@ -249,7 +257,7 @@ def main():
             num_layers=3,
             latent_dim=64,
             hidden_dim=128,
-            dropout=.75
+            dropout=0.75,
         ),
         dict(
             max_steps=2000,
@@ -258,7 +266,7 @@ def main():
             num_layers=5,
             latent_dim=256,
             hidden_dim=512,
-            dropout=.5
+            dropout=0.5,
         ),
         dict(
             max_steps=2000,
@@ -267,7 +275,7 @@ def main():
             num_layers=5,
             latent_dim=256,
             hidden_dim=512,
-            dropout=.8
+            dropout=0.8,
         ),
     ]
 
@@ -276,7 +284,7 @@ def main():
 
     def run_solve(riddle_ids, hparams):
         solved = []
-        for id in riddle_ids:
+        for id in tqdm.tqdm(riddle_ids):
             riddle = dataset.load_riddle_from_id(id)
 
             # only try riddles with equal input/output size
@@ -310,7 +318,7 @@ def main():
         solved_riddles = len(train_solved) + len(eval_solved)
         total_riddles = len(eval_riddle_ids) + len(train_riddle_ids)
         print(
-            f"Combined: {solved_riddles/total_riddles}, ({solved_riddles/total_riddles:%})"
+            f"Combined: {solved_riddles}/{total_riddles}, ({solved_riddles/total_riddles:%})"
         )
 
         print("Correctly predicted train:", train_solved)
