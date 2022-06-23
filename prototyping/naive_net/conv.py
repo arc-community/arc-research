@@ -247,19 +247,24 @@ def main():
                     solved.append(riddle.riddle_id)
         return solved
 
-
     for i, hparams in enumerate(hparam_configs):
         print(f"hparams #{i}: ", hparams)
 
         train_solved = run_solve(train_riddle_ids, hparams)
         eval_solved = run_solve(eval_riddle_ids, hparams)
 
-        print(f"Train: {len(train_solved)}/{len(train_riddle_ids)}, ({len(train_solved)/len(train_riddle_ids):%})")
-        print(f"Eval: {len(eval_solved)}/{len(eval_riddle_ids)}, ({len(eval_solved)/len(eval_riddle_ids):%})")
+        print(
+            f"Train: {len(train_solved)}/{len(train_riddle_ids)}, ({len(train_solved)/len(train_riddle_ids):%})"
+        )
+        print(
+            f"Eval: {len(eval_solved)}/{len(eval_riddle_ids)}, ({len(eval_solved)/len(eval_riddle_ids):%})"
+        )
 
         solved_riddles = len(train_solved) + len(eval_solved)
-        total_riddles = len(eval_riddle_ids)+len(train_riddle_ids)
-        print(f"Combined: {solved_riddles/{total_riddles}, (solved_riddles/total_riddles):%})")
+        total_riddles = len(eval_riddle_ids) + len(train_riddle_ids)
+        print(
+            f"Combined: {solved_riddles/total_riddles}, ({solved_riddles/total_riddles:%})"
+        )
 
         print("Correctly predicted train:", train_solved)
         print("Correctly predicted eval:", eval_solved)
