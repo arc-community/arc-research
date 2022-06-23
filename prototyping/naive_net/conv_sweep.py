@@ -108,9 +108,7 @@ class ConvNet(nn.Module):
             normalize=normalize,
             nonlinearity=nonlinearity,
         )
-        self.output_projection = conv1x1(
-            in_planes=latent_dim, out_planes=out_planes, bias=True
-        )
+        self.output_projection = conv1x1(in_planes=latent_dim, out_planes=out_planes, bias=True)
 
     def forward(self, x):
         x = self.conv0(x)
@@ -253,9 +251,7 @@ def main():
     torch.manual_seed(seed)
     device = torch.device(args.device, args.device_index)
 
-    wandb.init(
-        project="arc_conv_sweep", config=vars(args)
-    )  # args will be ignored during sweep
+    wandb.init(project="arc_conv_sweep", config=vars(args))  # args will be ignored during sweep
 
     hparam_names = [
         "max_steps",
@@ -281,13 +277,9 @@ def main():
 
             # only try riddles with equal input/output size
             if all(
-                p.input.num_rows == p.output.num_rows
-                and p.input.num_cols == p.output.num_cols
-                for p in riddle.train
+                p.input.num_rows == p.output.num_rows and p.input.num_cols == p.output.num_cols for p in riddle.train
             ) and all(
-                p.input.num_rows == p.output.num_rows
-                and p.input.num_cols == p.output.num_cols
-                for p in riddle.test
+                p.input.num_rows == p.output.num_rows and p.input.num_cols == p.output.num_cols for p in riddle.test
             ):
                 success, result = conv_solve(riddle, device, **hparams)
                 if success:
@@ -302,27 +294,21 @@ def main():
     train_solved = run_solve("train", train_riddle_ids, hparams)
     eval_solved = run_solve("eval", eval_riddle_ids, hparams)
 
-    print(
-        f"Train: {len(train_solved)}/{len(train_riddle_ids)}, ({len(train_solved)/len(train_riddle_ids):%})"
-    )
-    print(
-        f"Eval: {len(eval_solved)}/{len(eval_riddle_ids)}, ({len(eval_solved)/len(eval_riddle_ids):%})"
-    )
+    print(f"Train: {len(train_solved)}/{len(train_riddle_ids)}, ({len(train_solved)/len(train_riddle_ids):%})")
+    print(f"Eval: {len(eval_solved)}/{len(eval_riddle_ids)}, ({len(eval_solved)/len(eval_riddle_ids):%})")
 
     solved_riddles = len(train_solved) + len(eval_solved)
     total_riddles = len(eval_riddle_ids) + len(train_riddle_ids)
-    print(
-        f"Combined: {solved_riddles}/{total_riddles}, ({solved_riddles/total_riddles:%})"
-    )
+    print(f"Combined: {solved_riddles}/{total_riddles}, ({solved_riddles/total_riddles:%})")
 
     print("Correctly predicted train:", train_solved)
     print("Correctly predicted eval:", eval_solved)
 
     wandb.log(
         {
-            "train_solved": train_solved,
-            "eval_solved": eval_solved,
-            "solved": train_solved + eval_solved,
+            "train_solved": len(train_solved),
+            "eval_solved": len(eval_solved),
+            "solved": len(train_solved) + len(eval_solved),
         }
     )
 
