@@ -253,9 +253,9 @@ def main():
     torch.manual_seed(seed)
     device = torch.device(args.device, args.device_index)
 
-    # wandb.init(
-    #     project="arc_conv_sweep", config=vars(args)
-    # )  # args will be ignored during sweep
+    wandb.init(
+        project="arc_conv_sweep", config=vars(args)
+    )  # args will be ignored during sweep
 
     hparam_names = [
         "max_steps",
@@ -274,9 +274,9 @@ def main():
     train_riddle_ids = dataset.get_riddle_ids(["training"])
     eval_riddle_ids = dataset.get_riddle_ids(["evaluation"])
 
-    def run_solve(riddle_ids, hparams):
+    def run_solve(set_id, riddle_ids, hparams):
         solved = []
-        for id in riddle_ids:
+        for i, id in enumerate(riddle_ids):
             riddle = dataset.load_riddle_from_id(id)
 
             # only try riddles with equal input/output size
@@ -292,12 +292,15 @@ def main():
                 success, result = conv_solve(riddle, device, **hparams)
                 if success:
                     solved.append(riddle.riddle_id)
+
+            # log some progress
+            wandb.log({set_id + ".tried": i, set_id + ".solved": len(solved)})
         return solved
 
     print(f"hparams", hparams)
 
-    train_solved = run_solve(train_riddle_ids, hparams)
-    eval_solved = run_solve(eval_riddle_ids, hparams)
+    train_solved = run_solve("train", train_riddle_ids, hparams)
+    eval_solved = run_solve("eval", eval_riddle_ids, hparams)
 
     print(
         f"Train: {len(train_solved)}/{len(train_riddle_ids)}, ({len(train_solved)/len(train_riddle_ids):%})"
