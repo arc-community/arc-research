@@ -1,4 +1,3 @@
-from operator import mod
 import numpy as np
 
 import torch
@@ -35,14 +34,16 @@ class Residual(nn.Module):
         in_planes=64,
         hidden_planes=128,
         normalize=nn.BatchNorm2d,
-        nonlinearity=nn.LeakyReLU,
+        nonlinearity=nn.GELU,  # nn.LeakyReLU,
+        dropout=0.0,
     ):
         super(Residual, self).__init__()
         self.activation_fn = nonlinearity()
         self.block = nn.Sequential(
             conv3x3(in_planes=in_planes, out_planes=hidden_planes),
             normalize(hidden_planes),
-            nonlinearity(inplace=True),
+            nonlinearity(),
+            nn.Dropout(dropout),
             conv1x1(in_planes=hidden_planes, out_planes=in_planes),
             normalize(in_planes),
         )
@@ -53,13 +54,13 @@ class Residual(nn.Module):
 
 
 class ResidualStack(nn.Module):
-    def __init__(self, num_layers=3, latent_dim=64, hidden_dim=128):
+    def __init__(self, num_layers=3, latent_dim=64, hidden_dim=128, dropout=0.0):
         super(ResidualStack, self).__init__()
         self.num_layers = num_layers
 
         layers = []
         for _ in range(num_layers):
-            layers.append(Residual(latent_dim, hidden_dim))
+            layers.append(Residual(latent_dim, hidden_dim, dropout=dropout))
         self._stack = nn.Sequential(*layers)
 
     def forward(self, x):
@@ -68,12 +69,21 @@ class ResidualStack(nn.Module):
 
 class ConvNet(nn.Module):
     def __init__(
-        self, in_planes=10, out_planes=10, latent_dim=64, num_layers=3, hidden_dim=128
+        self,
+        in_planes=10,
+        out_planes=10,
+        latent_dim=64,
+        num_layers=3,
+        hidden_dim=128,
+        dropout=0.0,
     ):
         super(ConvNet, self).__init__()
-        self.conv0 = conv3x3(in_planes=in_planes, out_planes=latent_dim)
+        self.conv0 = conv1x1(in_planes=in_planes, out_planes=latent_dim)
         self.residual_stack = ResidualStack(
-            num_layers=num_layers, latent_dim=latent_dim, hidden_dim=hidden_dim
+            num_layers=num_layers,
+            latent_dim=latent_dim,
+            hidden_dim=hidden_dim,
+            dropout=dropout,
         )
         self.output_projection = conv1x1(in_planes=latent_dim, out_planes=out_planes)
 
@@ -93,6 +103,7 @@ def conv_solve(
     num_layers=2,
     latent_dim=64,
     hidden_dim=128,
+    dropout=.0
 ):
     train_pairs = riddle.train
 
@@ -105,6 +116,7 @@ def conv_solve(
         latent_dim=latent_dim,
         num_layers=num_layers,
         hidden_dim=hidden_dim,
+        dropout=dropout
     )
     optimizer = optim.AdamW(
         model.parameters(),
@@ -165,6 +177,7 @@ def main():
             num_layers=1,
             latent_dim=32,
             hidden_dim=64,
+            dropout=.0
         ),
         dict(
             max_steps=250,
@@ -173,6 +186,7 @@ def main():
             num_layers=2,
             latent_dim=32,
             hidden_dim=64,
+            dropout=.2
         ),
         dict(
             max_steps=500,
@@ -181,6 +195,7 @@ def main():
             num_layers=1,
             latent_dim=64,
             hidden_dim=128,
+            dropout=.0
         ),
         dict(
             max_steps=100,
@@ -189,6 +204,7 @@ def main():
             num_layers=2,
             latent_dim=64,
             hidden_dim=128,
+            dropout=.0
         ),
         dict(
             max_steps=500,
@@ -197,6 +213,16 @@ def main():
             num_layers=2,
             latent_dim=64,
             hidden_dim=128,
+            dropout=.0
+        ),
+        dict(
+            max_steps=2500,
+            lr=1e-4,
+            weight_decay=0.0,
+            num_layers=2,
+            latent_dim=64,
+            hidden_dim=128,
+            dropout=.5
         ),
         dict(
             max_steps=1000,
@@ -205,6 +231,16 @@ def main():
             num_layers=3,
             latent_dim=64,
             hidden_dim=128,
+            dropout=.0
+        ),
+        dict(
+            max_steps=1000,
+            lr=1e-4,
+            weight_decay=0.1,
+            num_layers=3,
+            latent_dim=64,
+            hidden_dim=128,
+            dropout=.5
         ),
         dict(
             max_steps=2000,
@@ -213,14 +249,25 @@ def main():
             num_layers=3,
             latent_dim=64,
             hidden_dim=128,
+            dropout=.75
         ),
         dict(
             max_steps=2000,
             lr=1e-4,
-            weight_decay=0.1,
+            weight_decay=0.25,
             num_layers=5,
             latent_dim=256,
             hidden_dim=512,
+            dropout=.5
+        ),
+        dict(
+            max_steps=2000,
+            lr=1e-4,
+            weight_decay=0.2,
+            num_layers=5,
+            latent_dim=256,
+            hidden_dim=512,
+            dropout=.8
         ),
     ]
 
