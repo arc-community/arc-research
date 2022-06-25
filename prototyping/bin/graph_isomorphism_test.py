@@ -14,9 +14,13 @@ from arc.utils.dataset import get_riddles, load_riddle_from_file
 def graphs_from_riddle(riddle: Riddle):
     graphs = defaultdict(dict)
     for i, board in enumerate(riddle.train):
-        graphs[i]['input'] = nx.from_numpy_matrix(np.array(board.input.__root__))
-        graphs[i]['output'] = nx.from_numpy_matrix(np.array(board.output.__root__))
+        graphs[i]['input'] = nx.from_numpy_matrix(binarize(board.input.as_np))
+        graphs[i]['output'] = nx.from_numpy_matrix(binarize(board.output.as_np))
     return graphs
+
+
+def binarize(x: np.ndarray):
+    return (x != 0).astype(int)
 
 
 def graphs_to_svg(riddle: Riddle):
