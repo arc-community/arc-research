@@ -14,8 +14,8 @@ from arc.utils.dataset import get_riddles, load_riddle_from_file
 def graphs_from_riddle(riddle: Riddle):
     graphs = defaultdict(dict)
     for i, board in enumerate(riddle.train):
-        graphs[i]['input'] = nx.from_numpy_matrix(binarize(board.input.as_np))
-        graphs[i]['output'] = nx.from_numpy_matrix(binarize(board.output.as_np))
+        graphs[i]['input'] = nx.from_numpy_matrix(binarize(board.input.np))
+        graphs[i]['output'] = nx.from_numpy_matrix(binarize(board.output.np))
     return graphs
 
 
@@ -28,8 +28,8 @@ def graphs_to_svg(riddle: Riddle):
     for i, board in enumerate(riddle.train):
         weisfeiler_lehman = WeisfeilerLehman()
 
-        inp = csr_matrix(np.array(riddle.train[i].input.__root__))
-        out = csr_matrix(np.array(riddle.train[i].output.__root__))
+        inp = csr_matrix(riddle.train[i].input.np)
+        out = csr_matrix(riddle.train[i].output.np)
 
         labels_inp = weisfeiler_lehman.fit_transform(inp)
         labels_out = weisfeiler_lehman.fit_transform(out)
