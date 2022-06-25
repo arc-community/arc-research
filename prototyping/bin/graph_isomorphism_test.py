@@ -39,19 +39,19 @@ def isomorphism_test(g: nx.classes.graph.Graph,
                      w: nx.classes.graph.Graph,
                      is_subgraph: bool):
     ismags = nx.algorithms.isomorphism.ISMAGS(g, w)
-    return ismags.subgraph_is_isomorphic() if is_subgraph else ismags.is_isomorphic()
+    return ismags.subgraph_is_isomorphic() if is_subgraph else nx.is_isomorphic(g, w)
 
 
 def square_boards(riddle: Riddle):
     check_inp = all([riddle.train[i].input.num_rows == riddle.train[i].input.num_cols for i in range(len(riddle.train))])
     check_out = all([riddle.train[i].output.num_rows == riddle.train[i].output.num_cols for i in range(len(riddle.train))])
-    check_size = all([np.prod(riddle.train[i].input.shape) < 250 for i in range(len(riddle.train))])
+    check_size = all([np.prod(riddle.train[i].input.shape) < 400 for i in range(len(riddle.train))])
     return check_inp and check_out and check_size
 
 
-def run_stats():
+def run_stats(dataset):
     # load the riddles
-    riddles = map(load_riddle_from_file, get_riddles().values())
+    riddles = map(load_riddle_from_file, get_riddles([dataset]).values())
 
     # keep square matrices only
     riddles_with_sq_boards = tee(filter(square_boards, riddles), 2)
@@ -88,4 +88,5 @@ def run_stats():
                 print(f'@id {diff_shape_riddles[i].riddle_id} @train[{k}] subgraph(input) is isomorphic: True')
 
 if __name__ == '__main__':
-    run_stats()
+    run_stats('training')
+    run_stats('evaluation')
