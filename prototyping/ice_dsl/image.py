@@ -152,8 +152,15 @@ class Image:
             r = r * base + c
         return r
 
-    def __str__(self):
+    def __str__(self) -> str:
         return f"{self.x}:{self.y} {self.w}x{self.h}"
+
+    def map(self, fn) -> Image:
+        mapped = [fn(i, j, self[i, j]) for i in range(self.h) for j in range(self.w)]
+        return Image(self.p, self.sz, mapped)
+
+    def clone(self) -> Image:
+        return Image(self.p, self.sz, self.mask.copy())
 
 
 badImg = Image((0, 0), (0, 0), [])
@@ -354,3 +361,42 @@ def getSize0(img: Image) -> Image:
 
 def Move(img: Image, p: Image) -> Image:
     return Image(img.p + p.p, img.sz, img.mask)
+
+
+def invert(img: Image) -> Image:
+    if img.w * img.h == 0:
+        return img
+
+    mask = colMask(img)
+    col = 1
+    while col < 10 and (mask >> col & 1) == 0:
+        col += 1
+    if col == 10:
+        col = 1
+
+    return img.map(lambda i, j, x: 0 if x != 0 else col)
+
+
+@overload
+def filterCol(img: Image, palette: Image) -> Image:
+    ...
+
+
+@overload
+def filterCol(img: Image, id: int) -> Image:
+    ...
+
+
+def filterCol(*args) -> Image:
+    if type(args[1]) == Image:
+        img, palette = args
+        col_mask = colMask(palette)
+        filtered = [x if (col_mask >> x) & 1 else 0 for x in img.mask]
+        return Image(img.p, img.sz, filtered)
+    else:
+        img, id = args
+        assert id >= 0 and id < 10
+        if id == 0:
+            return invert(img)
+        else:
+            return filterCol(img, Col(id))
