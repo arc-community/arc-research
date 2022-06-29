@@ -1,7 +1,7 @@
 from arc.interface import Riddle, Board
 from arc.utils import dataset
 
-from image import Point, Image, majorityCol, subImage
+from image import Point, Image, majorityCol, subImage, splitCols
 
 import typer
 
@@ -25,15 +25,17 @@ def main():
         b = riddle.train[0].output
         img = board_to_image(b)
         img = subImage(img, Point(2, 2), Point(4, 4))
-        print('maj col:', majorityCol(img))
+        print("maj col:", majorityCol(img))
         print("img", img)
 
         b2 = image_to_board(img)
+        a = splitCols(img)
+        for x in a:
+            typer.echo(image_to_board(x).fmt(True))
+        print(a)
         typer.echo(b2.fmt(colored=True))
 
-        typer.echo(riddle.fmt(colored=True, with_test_outputs=False))
-
-    print("hello")
+        # typer.echo(riddle.fmt(colored=True, with_test_outputs=False))
 
 
 if __name__ == "__main__":

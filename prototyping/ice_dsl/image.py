@@ -1,8 +1,7 @@
 from __future__ import annotations
+from tkinter import W
 from tokenize import Number
 from typing import Iterable, Tuple, overload, List
-
-from transformers import RoFormerForSequenceClassification
 
 
 class Point:
@@ -125,7 +124,11 @@ class Image:
         self.mask[i * self.w + j] = value
 
     def safe(self, i: int, j: int) -> int:
-        return 0 if i < 0 or j < 0 or i >= self.h or j >= self.w else self.mask[i * self.w + j]
+        return (
+            0
+            if i < 0 or j < 0 or i >= self.h or j >= self.w
+            else self.mask[i * self.w + j]
+        )
 
     def __eq__(self, other: object) -> bool:
         return self.p == other.p and self.sz == other.sz and self.mask == other.mask
@@ -214,6 +217,18 @@ def empty(*args):
         return full(p, sz, 0)
 
 
+def colMask(img: Image) -> int:
+    mask = 0
+    for i in range(img.h):
+        for j in range(img.w):
+            mask |= 1 << img[(i, j)]
+    return mask
+
+
+def countCols(img: Image) -> int:
+    return len(set(img.mask))
+
+
 def count(img: Image) -> int:
     ans = 0
     for i in range(img.h):
@@ -226,21 +241,29 @@ def isRectangle(a: Image) -> bool:
     return count(a) == a.w * a.h
 
 
-def colMask(img: Image) -> int:
-    mask = 0
-    for i in range(img.h):
-        for j in range(img.w):
-            mask |= 1 << img[(i, j)]
-    return mask
-
-
-def countCols(img: Image) -> int:
-    mask = colMask(img)
+# def countComponents_dfs(Image&img, int r, int c) {
+#     img(r,c) = 0;
+#     for (int nr = r-1; nr <= r+1; nr++)
+#       for (int nc = c-1; nc <= c+1; nc++)
+# 	if (nr >= 0 && nr < img.h && nc >= 0 && nc < img.w && img(nr,nc))
+# 	  countComponents_dfs(img,nr,nc);
+#   }
 
 
 def subImage(img: Image, p: Point, sz: Point) -> Image:
-    assert p.x >= 0 and p.y >= 0 and p.x + sz.x <= img.w and p.y + sz.y <= img.h and sz.x >= 0 and sz.y >= 0
-    return Image(img.p + p, sz, [img[(i + p.y, j + p.x)] for i in range(sz.y) for j in range(sz.x)])
+    assert (
+        p.x >= 0
+        and p.y >= 0
+        and p.x + sz.x <= img.w
+        and p.y + sz.y <= img.h
+        and sz.x >= 0
+        and sz.y >= 0
+    )
+    return Image(
+        img.p + p,
+        sz,
+        [img[(i + p.y, j + p.x)] for i in range(sz.y) for j in range(sz.x)],
+    )
 
 
 def majorityCol(img: Image, include0: int = 0) -> int:
@@ -265,10 +288,36 @@ def majorityCol(img: Image, include0: int = 0) -> int:
     return ret
 
 
-# def splitCols(img: img, include0=False):
-#     ret = []
+def splitCols(img: img, include0=False) -> List[Image]:
+    ret = []
+    mask = colMask(img)
+    for c in range(int(include0), 10):
+        if mask >> c & 1:
+            ret.append(Image(img.p, img.sz, [int(x == c) for x in img.mask]))
+    return ret
 
-#     return ret
+
+def Col(id: int) -> Image:
+    assert id >= 0 and id < 10
+    return full((0, 0), (1, 1), id)
+
+
+def Pos(dx: int, dy: int) -> Image:
+    return full((dx, dy), (1, 1))
+
+
+def Square(id: int) -> Image:
+    assert id >= 1
+    return full((0, 0), (id, id))
+
+
+def Line(orient: int, id: int) -> Image:
+    assert id >= 1
+    if orient != 0:
+        w, h = id, 1
+    else:
+        w, h = 1, id
+    return full((0, 0), (w, h))
 
 
 def getPos(img: Image) -> Image:
