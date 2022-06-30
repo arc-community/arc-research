@@ -1,6 +1,5 @@
 from __future__ import annotations
-from tkinter import W
-from tokenize import Number
+from email.mime import image
 from typing import Iterable, Tuple, overload, List
 
 
@@ -59,6 +58,20 @@ class Point:
     def __str__(self):
         return f"({self.x}, {self.y})"
 
+    def astuple(self):
+        return self.x, self.y
+
+    def __iter__(self):
+        return iter(self.astuple())
+
+    def __getitem__(self, key):
+        if key == 0:
+            return self.x
+        elif key == 1:
+            return self.y
+
+        raise IndexError("Index out of range.")
+
 
 class Image:
     @overload
@@ -112,6 +125,10 @@ class Image:
     @h.setter
     def h(self, value: int):
         self.sz.y = value
+
+    @property
+    def area(self):
+        return self.w * self.h
 
     def __getitem__(self, key) -> int:
         i, j = key
@@ -245,7 +262,7 @@ def count(img: Image) -> int:
 
 
 def isRectangle(a: Image) -> bool:
-    return count(a) == a.w * a.h
+    return count(a) == a.area
 
 
 # def countComponents_dfs(Image&img, int r, int c) {
@@ -295,7 +312,7 @@ def majorityCol(img: Image, include0: int = 0) -> int:
     return ret
 
 
-def splitCols(img: img, include0=False) -> List[Image]:
+def splitCols(img: Image, include0: bool = False) -> List[Image]:
     ret = []
     mask = colMask(img)
     for c in range(int(include0), 10):
@@ -335,8 +352,16 @@ def getSize(img: Image) -> Image:
     return full(Point(0, 0), img.sz, majorityCol(img))
 
 
+def getSize0(img: Image) -> Image:
+    return full(Point(0, 0), img.sz, 0)
+
+
 def hull(img: Image) -> Image:
     return full(img.p, img.sz, majorityCol(img))
+
+
+def hull0(img: Image) -> Image:
+    return full(img.p, img.sz, 0)
 
 
 def toOrigin(img: Image) -> Image:
@@ -351,20 +376,12 @@ def getH(img: Image, id: int) -> Image:
     return full(Point(0, 0), Point(1 if id == 0 else img.h, img.h), majorityCol(img))
 
 
-def hull0(img: Image) -> Image:
-    return full(img.p, img.sz, 0)
-
-
-def getSize0(img: Image) -> Image:
-    return full(Point(0, 0), img.sz, 0)
-
-
 def Move(img: Image, p: Image) -> Image:
     return Image(img.p + p.p, img.sz, img.mask)
 
 
 def invert(img: Image) -> Image:
-    if img.w * img.h == 0:
+    if img.area == 0:
         return img
 
     mask = colMask(img)
@@ -400,3 +417,124 @@ def filterCol(*args) -> Image:
             return invert(img)
         else:
             return filterCol(img, Col(id))
+
+
+def broadcast(col: Image, shape: Image, include0: bool = True):
+    """Return a resized version of col that matches the size of shape"""
+    if shape.area == 0 or col.area == 0:
+        return badImg
+
+    if shape.w % col.w == 0 and shape.h % col.h == 0:
+        ret = shape.clone()
+        dh, dw = shape.h // col.h, shape.w // col.w
+
+        for ii in range(col.h):
+            for jj in range(col.w):
+                c = col[ii, jj]
+                for i in range(ii * dh, ii * dh + dh):
+                    for j in range(jj * dw, jj * dw + dw):
+                        ret[i, j] = c
+        return ret
+
+    # AKo: Should probably replaced by proper resampling code
+
+    ret = shape.clone()
+    fh, fw = col.h / shape.h, col.w / shape.w
+
+    eps = 1e-9
+    w0 = [0.0 for _ in range(10)]
+    for c in col.mask:
+        w0[c] += 1e-6
+
+    tot = fh * fw
+
+    for i in range(shape.h):
+        for j in range(shape.w):
+            weight = w0.copy()
+
+            r0 = i * fh + eps
+            r1 = (i + 1) * fh - eps
+            c0 = j * fw + eps
+            c1 = (j + 1) * fw - eps
+
+            guess = int(not include0)
+            y = int(r0)
+            while y < r1:
+                # wy = min(y + 1, r1) - max(y, r0)
+                wy = r1 - r0
+
+                x = int(c0)
+                while x < c1:
+                    # wx = min(x + 1, c1) - max(x, c0)
+                    wx = c1 - c0
+                    c = col[y, x]
+                    weight[c] += wx * wy
+                    guess = c
+
+                    x += 1
+
+                y += 1
+
+            if weight[guess] * 2 > tot:
+                ret[i, j] = guess
+                continue
+
+            maj = int(not include0)
+            w = weight[maj]
+            for c in range(1, 10):
+                if weight[c] > w:
+                    maj = c
+                    w = weight[c]
+
+            ret[i, j] = maj
+
+    return ret
+
+
+def colShape(col: Image, shape: Image) -> Image:
+    """Return a resized copy of col with the size of shape with all pixels set to 0 that where 0 in shape"""
+    if shape.area == 0 or col.area == 0:
+        return badImg
+    ret = broadcast(col, getSize(shape))
+    ret.p = shape.p
+    for i in range(ret.h):
+        for j in range(ret.h):
+            if shape[i, j] == 0:
+                ret[i, j] = 0
+    return ret
+
+
+def colShape(shape: Image, id: int) -> Image:
+    """Set any non-zero pixel in image to the color specified by id."""
+    assert id >= 0 and id < 10
+    return Image(shape.p, shape.sz, [id if x != 0 else 0 for x in shape.mask])
+
+
+def compress(img: Image, bg: Image = Col(0)):
+    """Remove all border columns and rows which contain only colors found in bg."""
+    bg_mask = colMask(bg)
+
+    xmi, xma, ymi, yma = 1e9, 0, 1e9, 0
+    for i in range(img.h):
+        for j in range(img.w):
+
+            if (bg_mask >> img[i, j] & 1) == 0:
+                xmi = min(xmi, j)
+                xma = max(xma, j)
+                ymi = min(ymi, i)
+                yma = max(yma, i)
+
+    if xmi == 1e9:
+        return badImg
+
+    ret = empty(img.p + Point(xmi, ymi), Point(xma - xmi + 1, yma - ymi + 1))
+    for i in range(ymi, yma):
+        for j in range(xmi, xma):
+            ret[i - ymi, j - xmi] = img[i, j]
+
+    return ret
+
+
+def center(img: Image) -> Image:
+    sz = Point((img.w + 1) % 2 + 1, (img.h + 1) % 2 + 1)
+    return full(img.p + (img.sz - sz) / 2, sz)

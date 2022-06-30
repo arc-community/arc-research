@@ -1,7 +1,18 @@
 from arc.interface import Riddle, Board
 from arc.utils import dataset
 
-from image import Point, Image, majorityCol, subImage, splitCols, invert, filterCol
+from image import (
+    Point,
+    Image,
+    majorityCol,
+    subImage,
+    splitCols,
+    invert,
+    filterCol,
+    broadcast,
+    full,
+    compress,
+)
 
 import typer
 
@@ -30,6 +41,12 @@ def main():
         print("img", img)
 
         b2 = image_to_board(img)
+
+        print("broadcast")
+        y = broadcast(img, full((0, 0), (11, 11)))
+        typer.echo(image_to_board(y).fmt(colored=True))
+        typer.echo(image_to_board(img).fmt(colored=True))
+
         a = splitCols(img)
         for x in a:
             typer.echo(image_to_board(x).fmt(True))
@@ -37,10 +54,17 @@ def main():
             typer.echo(image_to_board(invert(x)).fmt(True))
             print()
             typer.echo(image_to_board(filterCol(x, 2)).fmt(True))
+
         print(a)
         typer.echo(b2.fmt(colored=True))
 
         # typer.echo(riddle.fmt(colored=True, with_test_outputs=False))
+
+    x = full((1, 1), (10, 10))
+    x[5, 5] = 1
+    x[7, 6] = 1
+    y = compress(x)
+    print(y.sz)
 
 
 if __name__ == "__main__":
