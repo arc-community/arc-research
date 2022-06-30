@@ -1,5 +1,4 @@
 from __future__ import annotations
-from email.mime import image
 from typing import Callable, Iterable, Tuple, overload, List
 
 MAXSIDE = 100
