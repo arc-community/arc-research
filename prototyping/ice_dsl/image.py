@@ -425,7 +425,7 @@ def filterCol(*args) -> Image:
             return filterCol(img, Col(id))
 
 
-def broadcast(col: Image, shape: Image, include0: bool = True):
+def broadcast(col: Image, shape: Image, include0: bool = True) -> Image:
     """Return a resized version of col that matches the size of shape"""
     if shape.area == 0 or col.area == 0:
         return badImg
