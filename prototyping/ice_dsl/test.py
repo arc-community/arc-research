@@ -12,6 +12,11 @@ from image import (
     broadcast,
     full,
     compress,
+    fill,
+    border,
+    interior,
+    interior2,
+    rigid
 )
 
 import typer
@@ -65,6 +70,29 @@ def main():
     x[7, 6] = 1
     y = compress(x)
     print(y.sz)
+
+    print('fill:')
+    typer.echo(image_to_board(fill(Image((0,0),(4,4), [1,1,1,1, 1,0,0,1, 1,0,0,1, 1,1,1,1]))).fmt(True))
+    print('border')
+    typer.echo(image_to_board(border(Image((0,0),(4,4), [0,1,1,1, 0,1,0,1, 0,1,2,1, 1,1,1,1]))).fmt(True))
+    print('interior')
+    typer.echo(image_to_board(interior(Image((0,0),(4,4), [1,1,1,1, 1,0,0,1, 1,0,2,1, 1,1,1,1]))).fmt(True))
+    print('interior2')
+    typer.echo(image_to_board(interior2(Image((0,0),(4,4), [1,1,1,1, 1,0,0,1, 1,0,2,1, 1,1,1,1]))).fmt(True))
+
+    def print_image(img):
+        typer.echo(image_to_board(img).fmt(True))
+
+    p0 = Image((0,0),(5,4), [
+        1,1,1,1,4, 
+        1,0,2,0,1, 
+        1,2,0,2,1, 
+        5,1,1,1,6])
+
+    for i in range(9):
+        x = rigid(p0, i)
+        print(f'rigid{i}:', i)
+        print_image(x)
 
 
 if __name__ == "__main__":
