@@ -34,6 +34,9 @@ class Point:
         self.x = int(x)
         self.y = int(y)
 
+    def copy(self) -> Point:
+        return Point(self.x, self.y)
+
     def __add__(self, other) -> Point:
         return Point(self.x + other.x, self.y + other.y)
 
@@ -147,11 +150,7 @@ class Image:
         self.mask[i * self.w + j] = value
 
     def safe(self, i: int, j: int) -> int:
-        return (
-            0
-            if i < 0 or j < 0 or i >= self.h or j >= self.w
-            else self.mask[i * self.w + j]
-        )
+        return 0 if i < 0 or j < 0 or i >= self.h or j >= self.w else self.mask[i * self.w + j]
 
     def __eq__(self, other: object) -> bool:
         return self.p == other.p and self.sz == other.sz and self.mask == other.mask
@@ -182,7 +181,7 @@ class Image:
         mapped = [fn(i, j, self[i, j]) for i in range(self.h) for j in range(self.w)]
         return Image(self.p, self.sz, mapped)
 
-    def clone(self) -> Image:
+    def copy(self) -> Image:
         return Image(self.p, self.sz, self.mask.copy())
 
 
@@ -281,14 +280,7 @@ def isRectangle(a: Image) -> bool:
 
 
 def subImage(img: Image, p: Point, sz: Point) -> Image:
-    assert (
-        p.x >= 0
-        and p.y >= 0
-        and p.x + sz.x <= img.w
-        and p.y + sz.y <= img.h
-        and sz.x >= 0
-        and sz.y >= 0
-    )
+    assert p.x >= 0 and p.y >= 0 and p.x + sz.x <= img.w and p.y + sz.y <= img.h and sz.x >= 0 and sz.y >= 0
     return Image(
         img.p + p,
         sz,
@@ -431,7 +423,7 @@ def broadcast(col: Image, shape: Image, include0: bool = True) -> Image:
         return badImg
 
     if shape.w % col.w == 0 and shape.h % col.h == 0:
-        ret = shape.clone()
+        ret = shape.copy()
         dh, dw = shape.h // col.h, shape.w // col.w
 
         for ii in range(col.h):
@@ -444,7 +436,7 @@ def broadcast(col: Image, shape: Image, include0: bool = True) -> Image:
 
     # AKo: Should probably be replaced by proper resampling code
 
-    ret = shape.clone()
+    ret = shape.copy()
     fh, fw = col.h / shape.h, col.w / shape.w
 
     eps = 1e-9
@@ -542,9 +534,7 @@ def compress(img: Image, bg: Image = Col(0)):
     return ret
 
 
-def compose_internal(
-    a: Image, b: Image, f: Callable[[int, int], int], overlap_only: int
-) -> Image:
+def compose_internal(a: Image, b: Image, f: Callable[[int, int], int], overlap_only: int) -> Image:
     ret = Image((0, 0), (0, 0), [])
     if overlap_only == 1:
         ret.p = Point(max(a.x, b.x), max(a.y, b.y))
@@ -584,25 +574,15 @@ def compose_internal(
 
 def compose(a: Image, b: Image, id: int = 0) -> Image:
     if id == 0:
-        return compose_internal(
-            a, b, lambda a, b: b if b != 0 else a, 0
-        )  # a then b, inside either
+        return compose_internal(a, b, lambda a, b: b if b != 0 else a, 0)  # a then b, inside either
     elif id == 1:
-        return compose_internal(
-            a, b, lambda a, b: b if b != 0 else a, 1
-        )  # a then b, inside both
+        return compose_internal(a, b, lambda a, b: b if b != 0 else a, 1)  # a then b, inside both
     elif id == 2:
-        return compose_internal(
-            a, b, lambda a, b: a if b != 0 else 0, 1
-        )  # a masked by b
+        return compose_internal(a, b, lambda a, b: a if b != 0 else 0, 1)  # a masked by b
     elif id == 3:
-        return compose_internal(
-            a, b, lambda a, b: b if b != 0 else a, 2
-        )  # a then b, inside of a
+        return compose_internal(a, b, lambda a, b: b if b != 0 else a, 2)  # a then b, inside of a
     elif id == 4:
-        return compose_internal(
-            a, b, lambda a, b: 0 if b != 0 else a, 2
-        )  # a masked by inverse of b, inside of a
+        return compose_internal(a, b, lambda a, b: 0 if b != 0 else a, 2)  # a masked by inverse of b, inside of a
     else:
         assert id >= 0 and id < 5
     return badImg
@@ -611,7 +591,7 @@ def compose(a: Image, b: Image, id: int = 0) -> Image:
 def compose_list(imgs: List[Image], id: int) -> Image:
     if len(imgs) == 0:
         return badImg
-    ret = imgs[0].clone()
+    ret = imgs[0].copy()
     for i in range(1, len(imgs)):
         ret = compose(ret, imgs[i], id)
     return ret
@@ -633,14 +613,7 @@ def fill(a: Image) -> Image:
         for d in range(4):
             nr = r + int(d == 2) - int(d == 3)
             nc = c + int(d == 0) - int(d == 1)
-            if (
-                nr >= 0
-                and nr < a.h
-                and nc >= 0
-                and nc < a.w
-                and a[nr, nc] == 0
-                and ret[nr, nc] != 0
-            ):
+            if nr >= 0 and nr < a.h and nc >= 0 and nc < a.w and a[nr, nc] == 0 and ret[nr, nc] != 0:
                 q.append((nr, nc))
                 ret[nr, nc] = 0
 
@@ -801,3 +774,111 @@ def rigid(img: Image, id: int) -> Image:
     else:
         assert id >= 0 and id < 9
         return badImg
+
+
+def get_regular_internal(col: List):
+    colw = len(col)
+
+    for w in range(1, colw):
+        s = -1
+        if colw % (w + 1) == w:  # No outer border
+            s = w
+        elif colw % (w + 1) == 1:  # Outer border
+            s = 0
+
+        if s != -1:
+            ok = True
+            for i in range(colw):
+                if col[i] != (i % (w + 1) == s):
+                    ok = False
+                    break
+            if ok:
+                return
+
+    for i in range(len(col)):
+        col[i] = False
+
+
+def getRegular(img: Image) -> Image:
+    """Look for regular grid division in single color"""
+    ret = img.copy()
+
+    col = [True] * img.w
+    row = [True] * img.h
+    for i in range(img.h):
+        for j in range(img.w):
+            if img[i, j] != img[i, 0]:
+                row[i] = False
+            if img[i, j] != img[0, j]:
+                col[j] = False
+
+    get_regular_internal(col)
+    get_regular_internal(row)
+    for i in range(img.h):
+        for j in range(img.w):
+            ret[i, j] = 1 if row[i] or col[j] else 0
+
+    return ret
+
+
+def clamp(x, lo, hi):
+    if x < lo:
+        return lo
+    elif x > hi:
+        return hi
+    return x
+
+
+def myStack(a: Image, b: Image, orient: int) -> Image:
+    assert orient >= 0 and orient <= 3
+    b = Image(a.p, b.sz, b.mask)
+    if orient == 0:  # Horizontal
+        b.x += a.w
+    elif orient == 1:  # Vertical
+        b.y += a.h
+    elif orient == 2:  # Diagonal
+        b.x += a.w
+        b.y += a.h
+    else:
+        # Other diagonal, bottom-left / top-right
+        c = a.copy()
+        c.y += b.h
+        b.x += a.w
+        return compose(c, b)
+
+    return compose(a, b)
+
+
+def wrap(line: Image, area: Image) -> Image:
+    if line.area == 0 or area.area == 0:
+        return badImg
+
+    ans = empty(area.sz)
+    for i in range(line.h):
+        for j in range(line.w):
+            x, y = j, i
+
+            x += y // area.h * line.w
+            y %= area.h
+
+            y += x // area.w * line.h
+            x %= area.w
+
+            if x >= 0 and y >= 0 and x < ans.w and y < ans.h:
+                ans[y, x] = line[i, j]
+
+    return ans
+
+
+def extend(img: Image, room: Image) -> Image:
+    if img.area == 0:
+        return badImg
+    ret = room.copy()
+    for i in range(ret.h):
+        for j in range(ret.w):
+            p = Point(j, i) + room.p - img.p
+            p.x = clamp(p.x, 0, img.w - 1)
+            p.y = clamp(p.y, 0, img.h - 1)
+            ret[i, j] = img[p.y, p.x]
+
+    return ret

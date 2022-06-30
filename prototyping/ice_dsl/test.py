@@ -16,7 +16,11 @@ from image import (
     border,
     interior,
     interior2,
-    rigid
+    rigid,
+    getRegular,
+    myStack,
+    wrap,
+    extend,
 )
 
 import typer
@@ -71,28 +75,93 @@ def main():
     y = compress(x)
     print(y.sz)
 
-    print('fill:')
-    typer.echo(image_to_board(fill(Image((0,0),(4,4), [1,1,1,1, 1,0,0,1, 1,0,0,1, 1,1,1,1]))).fmt(True))
-    print('border')
-    typer.echo(image_to_board(border(Image((0,0),(4,4), [0,1,1,1, 0,1,0,1, 0,1,2,1, 1,1,1,1]))).fmt(True))
-    print('interior')
-    typer.echo(image_to_board(interior(Image((0,0),(4,4), [1,1,1,1, 1,0,0,1, 1,0,2,1, 1,1,1,1]))).fmt(True))
-    print('interior2')
-    typer.echo(image_to_board(interior2(Image((0,0),(4,4), [1,1,1,1, 1,0,0,1, 1,0,2,1, 1,1,1,1]))).fmt(True))
+    print("fill:")
+    typer.echo(image_to_board(fill(Image((0, 0), (4, 4), [1, 1, 1, 1, 1, 0, 0, 1, 1, 0, 0, 1, 1, 1, 1, 1]))).fmt(True))
+    print("border")
+    typer.echo(
+        image_to_board(border(Image((0, 0), (4, 4), [0, 1, 1, 1, 0, 1, 0, 1, 0, 1, 2, 1, 1, 1, 1, 1]))).fmt(True)
+    )
+    print("interior")
+    typer.echo(
+        image_to_board(interior(Image((0, 0), (4, 4), [1, 1, 1, 1, 1, 0, 0, 1, 1, 0, 2, 1, 1, 1, 1, 1]))).fmt(True)
+    )
+    print("interior2")
+    typer.echo(
+        image_to_board(interior2(Image((0, 0), (4, 4), [1, 1, 1, 1, 1, 0, 0, 1, 1, 0, 2, 1, 1, 1, 1, 1]))).fmt(True)
+    )
 
     def print_image(img):
         typer.echo(image_to_board(img).fmt(True))
 
-    p0 = Image((0,0),(5,4), [
-        1,1,1,1,4, 
-        1,0,2,0,1, 
-        1,2,0,2,1, 
-        5,1,1,1,6])
+    p0 = Image((0, 0), (5, 4), [1, 1, 1, 1, 4, 1, 0, 2, 0, 1, 1, 2, 0, 2, 1, 5, 1, 1, 1, 6])
 
     for i in range(9):
         x = rigid(p0, i)
-        print(f'rigid{i}:', i)
+        print(f"rigid{i}:", i)
         print_image(x)
+
+    p1 = Image(
+        (0, 0),
+        (5, 5),
+        [
+            0,
+            1,
+            0,
+            1,
+            0,
+            1,
+            1,
+            1,
+            1,
+            1,
+            0,
+            1,
+            7,
+            1,
+            0,
+            1,
+            1,
+            1,
+            1,
+            1,
+            0,
+            1,
+            0,
+            1,
+            0,
+        ],
+    )
+    print("getRegular")
+    x = getRegular(p1)
+    print_image(x)
+
+    print("myStack")
+    x = myStack(p0, p1, 2)
+    print_image(x)
+
+    print("wrap")
+    p3 = Image(
+        (0, 0),
+        (10, 1),
+        [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+        ],
+    )
+    x = wrap(p3, full((0, 0), (3, 4)))
+    print_image(x)
+
+    print("extend")
+    x = extend(p1, full((0, 0), (10, 10)))
+    print_image(x)
 
 
 if __name__ == "__main__":
