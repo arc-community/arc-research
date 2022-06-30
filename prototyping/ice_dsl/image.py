@@ -962,6 +962,7 @@ def replaceCols(base: Image, cols: Image) -> Image:
 
 
 def repeat(a: Image, b: Image, pad: int = 0) -> Image:
+    """Fill b with repeated copies of a"""
     if a.area <= 0 or b.area <= 0:
         return badImg
 
@@ -986,30 +987,37 @@ def repeat(a: Image, b: Image, pad: int = 0) -> Image:
     return ret
 
 
-# def mirror(a: Image, b: Image, pad: int=0)-> Image:
-#     if a.area <= 0 or b.area <= 0:
-#         return badImg
-#     ret = empty(b.p, b.sz)
+def mirror(a: Image, b: Image, pad: int = 0) -> Image:
+    """Like repeat but with every 2nd mirrored"""
+    if a.area <= 0 or b.area <= 0:
+        return badImg
+    ret = empty(b.p, b.sz)
 
-#   const int W = a.w+pad, H = a.h+pad;
-#   const int W2 = W*2, H2 = H*2;
-#   int ai  = ((b.y-a.y)%H2+H2)%H2;
-#   int aj0 = ((b.x-a.x)%W2+W2)%W2;
-#   for (int i = 0; i < ret.h; i++) {
-#     int aj = aj0;
-#     for (int j = 0; j < ret.w; j++) {
-#       int x = -1, y = -1;
-#       if (aj < a.w) x = aj;
-#       else if (aj >= W && aj < W+a.w) x = W+a.w-1-aj;
-#       if (ai < a.h) y = ai;
-#       else if (ai >= H && ai < H+a.h) y = H+a.h-1-ai;
-#       if (x != -1 && y != -1)
-# 	ret(i,j) = a(y,x);
-#       if (++aj == W2) aj = 0;
-#     }
-#     if (++ai == H2) ai = 0;
-#   }
-#     return ret
+    W, H = a.w + pad, a.h + pad
+    W2, H2 = W * 2, H * 2
+    ai = ((b.y - a.y) % H2 + H2) % H2
+    aj0 = ((b.x - a.x) % W2 + W2) % W2
+    for i in range(ret.h):
+        aj = aj0
+        for j in range(ret.w):
+            x, y = -1, -1
+            if aj < a.w:
+                x = aj
+            elif aj >= W and aj < W + a.w:
+                x = W + a.w - 1 - aj
+            if ai < a.h:
+                y = ai
+            elif ai >= H and ai < H + a.h:
+                y = H + a.h - 1 - ai
+            if x != -1 and y != -1:
+                ret[i, j] = a[y, x]
+            aj += 1
+            if aj == W2:
+                aj = 0
+        ai += 1
+        if ai == H2:
+            ai = 0
+    return ret
 
 
 def majCol(img: Image):

@@ -26,6 +26,7 @@ from image import (
     outerProductSI,
     replaceCols,
     repeat,
+    mirror
 )
 
 import typer
@@ -178,6 +179,10 @@ def main():
 
     print("repeat")
     x = repeat(p0, empty((0, 0), (15, 15)), 1)
+    print_image(x)
+
+    print("mirror")
+    x = mirror(p0, empty((0, 0), (15, 15)), 1)
     print_image(x)
 
 
