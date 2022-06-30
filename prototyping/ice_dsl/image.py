@@ -882,3 +882,135 @@ def extend(img: Image, room: Image) -> Image:
             ret[i, j] = img[p.y, p.x]
 
     return ret
+
+
+def outerProductIS(a: Image, b: Image) -> Image:
+    if a.w * b.w > MAXSIDE or a.h * b.h > MAXSIDE or a.w * b.w * a.h * b.h > MAXAREA:
+        return badImg
+    rpos = Point(a.p.x * b.w + b.p.x, a.p.y * b.h + b.p.y)
+    ret = empty(rpos, Point(a.w * b.w, a.h * b.h))
+    for i in range(a.h):
+        for j in range(a.w):
+            for k in range(b.h):
+                for l in range(b.w):
+                    ret[i * b.h + k, j * b.w + l] = a[i, j] * int(b[k, l] != 0)
+    return ret
+
+
+def outerProductSI(a: Image, b: Image) -> Image:
+    if a.w * b.w > MAXSIDE or a.h * b.h > MAXSIDE or a.w * b.w * a.h * b.h > MAXAREA:
+        return badImg
+    rpos = Point(a.x * b.w + b.x, a.y * b.h + b.y)
+    ret = empty(rpos, Point(a.w * b.w, a.h * b.h))
+    for i in range(a.h):
+        for j in range(a.w):
+            for k in range(b.h):
+                for l in range(b.w):
+                    ret[i * b.h + k, j * b.w + l] = int(a[i, j] != 0) * b[k, l]
+    return ret
+
+
+def align(a: Image, b: Image) -> Image:
+    """Find most matching color and align a to b using it."""
+    ret = a.copy()
+    match_size = 0
+    for c in range(1, 10):
+        ca = compress(filterCol(a, c))
+        cb = compress(filterCol(b, c))
+        if ca.mask == cb.mask:
+            cnt = count(ca)
+            if cnt > match_size:
+                match_size = cnt
+                ret.p = a.p + cb.p - ca.p
+    if match_size == 0:
+        return badImg
+    return ret
+
+
+def replaceCols(base: Image, cols: Image) -> Image:
+    ret = base.copy()
+    done = empty(base.p, base.sz)
+    d = base.p - cols.p
+
+    for i in range(base.h):
+        for j in range(base.w):
+            if done[i, j] == 0 and base[i, j] != 0:
+                acol = base[i, j]
+                cnt = [0] * 10
+                path = []
+
+                def dfs(r: int, c: int):
+                    if r < 0 or r >= base.h or c < 0 or c >= base.w or base[r, c] != acol or done[r, c] != 0:
+                        return
+                    cnt[cols.safe(r + d.y, c + d.x)] += 1
+                    path.append((r, c))
+                    done[r, c] = 1
+                    for nr in (r - 1, r, r + 1):
+                        for nc in (c - 1, c, c + 1):
+                            dfs(nr, nc)
+
+                dfs(i, j)
+                maj = (0, 0)
+                for c in range(1, 10):
+                    if cnt[c] > maj[0]:
+                        maj = (cnt[c], -c)
+
+                for r, c in path:
+                    ret[r, c] = -maj[1]
+
+    return ret
+
+
+def repeat(a: Image, b: Image, pad: int = 0) -> Image:
+    if a.area <= 0 or b.area <= 0:
+        return badImg
+
+    ret = empty(b.p, b.sz)
+    W = a.w + pad
+    H = a.h + pad
+    ai = ((b.y - a.y) % H + H) % H
+    aj0 = ((b.x - a.x) % W + W) % W
+    for i in range(ret.h):
+        aj = aj0
+        for j in range(ret.w):
+            if ai < a.h and aj < a.w:
+                ret[i, j] = a[ai, aj]
+            aj += 1
+            if aj == W:
+                aj = 0
+
+        ai += 1
+        if ai == H:
+            ai = 0
+
+    return ret
+
+
+# def mirror(a: Image, b: Image, pad: int=0)-> Image:
+#     if a.area <= 0 or b.area <= 0:
+#         return badImg
+#     ret = empty(b.p, b.sz)
+
+#   const int W = a.w+pad, H = a.h+pad;
+#   const int W2 = W*2, H2 = H*2;
+#   int ai  = ((b.y-a.y)%H2+H2)%H2;
+#   int aj0 = ((b.x-a.x)%W2+W2)%W2;
+#   for (int i = 0; i < ret.h; i++) {
+#     int aj = aj0;
+#     for (int j = 0; j < ret.w; j++) {
+#       int x = -1, y = -1;
+#       if (aj < a.w) x = aj;
+#       else if (aj >= W && aj < W+a.w) x = W+a.w-1-aj;
+#       if (ai < a.h) y = ai;
+#       else if (ai >= H && ai < H+a.h) y = H+a.h-1-ai;
+#       if (x != -1 && y != -1)
+# 	ret(i,j) = a(y,x);
+#       if (++aj == W2) aj = 0;
+#     }
+#     if (++ai == H2) ai = 0;
+#   }
+#     return ret
+
+
+def majCol(img: Image):
+    return Col(majorityCol(img))

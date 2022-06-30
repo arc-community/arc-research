@@ -4,6 +4,7 @@ from arc.utils import dataset
 from image import (
     Point,
     Image,
+    empty,
     majorityCol,
     subImage,
     splitCols,
@@ -21,6 +22,10 @@ from image import (
     myStack,
     wrap,
     extend,
+    outerProductIS,
+    outerProductSI,
+    replaceCols,
+    repeat,
 )
 
 import typer
@@ -161,6 +166,18 @@ def main():
 
     print("extend")
     x = extend(p1, full((0, 0), (10, 10)))
+    print_image(x)
+
+    print("outerProductIS")
+    x = outerProductIS(p1, p3)
+    print_image(x)
+
+    print("replaceCols")
+    x = replaceCols(p0, Image((0, 0), (5, 1), [0, 0, 0, 2, 1]))
+    print_image(x)
+
+    print("repeat")
+    x = repeat(p0, empty((0, 0), (15, 15)), 1)
     print_image(x)
 
 
