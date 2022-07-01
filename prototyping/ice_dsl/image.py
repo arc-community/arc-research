@@ -74,9 +74,9 @@ class Point:
         return iter(self.astuple())
 
     def __getitem__(self, key):
-        if key == 0:
+        if key == 0 or key == "x":
             return self.x
-        elif key == 1:
+        elif key == 1 or key == "y":
             return self.y
 
         raise IndexError("Index out of range.")
@@ -150,7 +150,11 @@ class Image:
         self.mask[i * self.w + j] = value
 
     def safe(self, i: int, j: int) -> int:
-        return 0 if i < 0 or j < 0 or i >= self.h or j >= self.w else self.mask[i * self.w + j]
+        return (
+            0
+            if i < 0 or j < 0 or i >= self.h or j >= self.w
+            else self.mask[i * self.w + j]
+        )
 
     def __eq__(self, other: object) -> bool:
         return self.p == other.p and self.sz == other.sz and self.mask == other.mask
@@ -270,17 +274,37 @@ def isRectangle(a: Image) -> bool:
     return count(a) == a.area
 
 
-# def countComponents_dfs(Image&img, int r, int c) {
-#     img(r,c) = 0;
-#     for (int nr = r-1; nr <= r+1; nr++)
-#       for (int nc = c-1; nc <= c+1; nc++)
-# 	if (nr >= 0 && nr < img.h && nc >= 0 && nc < img.w && img(nr,nc))
-# 	  countComponents_dfs(img,nr,nc);
-#   }
+def clear_dfs(img: Image, r: int, c: int) -> None:
+    """clear pixel at r,c and blob of non-zero adjacent pixels"""
+    img[r, c] = 0
+    for nr in (r - 1, nr, r + 1):
+        for nc in (c - 1, nc, c + 1):
+            if nr >= 0 and nr < img.h and nc >= 0 and nc < img.w and img[nr, nc] != 0:
+                clear_dfs(img, nr, nc)
+
+
+def countComponents(img: Image) -> int:
+    """Count number of"""
+    img = img.copy()
+    ans = 0
+    for i in range(img.h):
+        for j in range(img.w):
+
+            if img[i, j] != 0:
+                clear_dfs(img, i, j)
+                ans += 1
+    return ans
 
 
 def subImage(img: Image, p: Point, sz: Point) -> Image:
-    assert p.x >= 0 and p.y >= 0 and p.x + sz.x <= img.w and p.y + sz.y <= img.h and sz.x >= 0 and sz.y >= 0
+    assert (
+        p.x >= 0
+        and p.y >= 0
+        and p.x + sz.x <= img.w
+        and p.y + sz.y <= img.h
+        and sz.x >= 0
+        and sz.y >= 0
+    )
     return Image(
         img.p + p,
         sz,
@@ -534,7 +558,9 @@ def compress(img: Image, bg: Image = Col(0)):
     return ret
 
 
-def compose_internal(a: Image, b: Image, f: Callable[[int, int], int], overlap_only: int) -> Image:
+def compose_internal(
+    a: Image, b: Image, f: Callable[[int, int], int], overlap_only: int
+) -> Image:
     ret = Image((0, 0), (0, 0), [])
     if overlap_only == 1:
         ret.p = Point(max(a.x, b.x), max(a.y, b.y))
@@ -574,15 +600,25 @@ def compose_internal(a: Image, b: Image, f: Callable[[int, int], int], overlap_o
 
 def compose(a: Image, b: Image, id: int = 0) -> Image:
     if id == 0:
-        return compose_internal(a, b, lambda a, b: b if b != 0 else a, 0)  # a then b, inside either
+        return compose_internal(
+            a, b, lambda a, b: b if b != 0 else a, 0
+        )  # a then b, inside either
     elif id == 1:
-        return compose_internal(a, b, lambda a, b: b if b != 0 else a, 1)  # a then b, inside both
+        return compose_internal(
+            a, b, lambda a, b: b if b != 0 else a, 1
+        )  # a then b, inside both
     elif id == 2:
-        return compose_internal(a, b, lambda a, b: a if b != 0 else 0, 1)  # a masked by b
+        return compose_internal(
+            a, b, lambda a, b: a if b != 0 else 0, 1
+        )  # a masked by b
     elif id == 3:
-        return compose_internal(a, b, lambda a, b: b if b != 0 else a, 2)  # a then b, inside of a
+        return compose_internal(
+            a, b, lambda a, b: b if b != 0 else a, 2
+        )  # a then b, inside of a
     elif id == 4:
-        return compose_internal(a, b, lambda a, b: 0 if b != 0 else a, 2)  # a masked by inverse of b, inside of a
+        return compose_internal(
+            a, b, lambda a, b: 0 if b != 0 else a, 2
+        )  # a masked by inverse of b, inside of a
     else:
         assert id >= 0 and id < 5
     return badImg
@@ -613,7 +649,14 @@ def fill(a: Image) -> Image:
         for d in range(4):
             nr = r + int(d == 2) - int(d == 3)
             nc = c + int(d == 0) - int(d == 1)
-            if nr >= 0 and nr < a.h and nc >= 0 and nc < a.w and a[nr, nc] == 0 and ret[nr, nc] != 0:
+            if (
+                nr >= 0
+                and nr < a.h
+                and nc >= 0
+                and nc < a.w
+                and a[nr, nc] == 0
+                and ret[nr, nc] != 0
+            ):
                 q.append((nr, nc))
                 ret[nr, nc] = 0
 
@@ -665,6 +708,82 @@ def border(a: Image) -> Image:
 
     for i in range(len(a.mask)):
         ret.mask[i] = ret.mask[i] * a.mask[i]
+    return ret
+
+
+def alignx(a: Image, b: Image, id) -> Image:
+    assert id >= 0 and id < 5
+    ret = a.copy()
+    if id == 0:
+        ret.x = b.x - a.w
+    elif id == 1:
+        ret.x = b.x
+    elif id == 2:
+        ret.x = b.x + (b.w - a.w) / 2
+    elif id == 3:
+        ret.x = b.x + b.w - a.w
+    elif id == 4:
+        ret.x = b.x + b.w
+    return ret
+
+
+def aligny(a: Image, b: Image, id: int) -> Image:
+    assert id >= 0 and id < 5
+    ret = a.copy()
+    if id == 0:
+        ret.y = b.y - a.h
+    elif id == 1:
+        ret.y = b.y
+    elif id == 2:
+        ret.y = b.y + (b.h - a.h) / 2
+    elif id == 3:
+        ret.y = b.y + b.h - a.h
+    elif id == 4:
+        ret.y = b.y + b.h
+    return ret
+
+
+def align(a: Image, b: Image, idx: int, idy: int) -> Image:
+    assert idx >= 0 and idx < 6
+    assert idy >= 0 and idy < 6
+    ret = a.copy()
+    if idx == 0:
+        ret.x = b.x - a.w
+    elif idx == 1:
+        ret.x = b.x
+    elif idx == 2:
+        ret.x = b.x + (b.w - a.w) / 2
+    elif idx == 3:
+        ret.x = b.x + b.w - a.w
+    elif idx == 4:
+        ret.x = b.x + b.w
+    if idy == 0:
+        ret.y = b.y - a.h
+    elif idy == 1:
+        ret.y = b.y
+    elif idy == 2:
+        ret.y = b.y + (b.h - a.h) / 2
+    elif idy == 3:
+        ret.y = b.y + b.h - a.h
+    elif idy == 4:
+        ret.y = b.y + b.h
+    return ret
+
+
+def align(a: Image, b: Image) -> Image:
+    """Find most matching color and align a to b using it."""
+    ret = a.copy()
+    match_size = 0
+    for c in range(1, 10):
+        ca = compress(filterCol(a, c))
+        cb = compress(filterCol(b, c))
+        if ca.mask == cb.mask:
+            cnt = count(ca)
+            if cnt > match_size:
+                match_size = cnt
+                ret.p = a.p + cb.p - ca.p
+    if match_size == 0:
+        return badImg
     return ret
 
 
@@ -821,12 +940,39 @@ def getRegular(img: Image) -> Image:
     return ret
 
 
-def clamp(x, lo, hi):
-    if x < lo:
-        return lo
-    elif x > hi:
-        return hi
-    return x
+def count(img: Image, id: int, outType: int) -> Image:
+    assert id >= 0 and id < 7
+    assert outType >= 0 and outType < 3
+
+    if id == 0:
+        num = count(img)
+    elif id == 1:
+        num = countCols(img)
+    elif id == 2:
+        num = countComponents(img)
+    elif id == 3:
+        num = img.w
+    elif id == 4:
+        num = img.h
+    elif id == 5:
+        num = max(img.w, img.h)
+    elif id == 6:
+        num = min(img.w, img.h)
+    else:
+        assert False
+
+    if outType == 0:
+        sz = Point(num, num)
+    elif outType == 1:
+        sz = Point(num, 1)
+    elif outType == 2:
+        sz = Point(1, num)
+    else:
+        raise ValueError("Unsupported output type")
+
+    if max(sz.x, sz.y) > MAXSIDE or sz.x * sz.y > MAXAREA:
+        return badImg
+    return full(sz, majorityCol(img))
 
 
 def myStack(a: Image, b: Image, orient: int) -> Image:
@@ -870,6 +1016,14 @@ def wrap(line: Image, area: Image) -> Image:
     return ans
 
 
+def clamp(x, lo, hi):
+    if x < lo:
+        return lo
+    elif x > hi:
+        return hi
+    return x
+
+
 def extend(img: Image, room: Image) -> Image:
     if img.area == 0:
         return badImg
@@ -880,6 +1034,91 @@ def extend(img: Image, room: Image) -> Image:
             p.x = clamp(p.x, 0, img.w - 1)
             p.y = clamp(p.y, 0, img.h - 1)
             ret[i, j] = img[p.y, p.x]
+
+    return ret
+
+
+def pickMax(v: List[Image], f: Callable[[Image], int]) -> Image:
+    if len(v) == 0:
+        return badImg
+    return max(v, key=f)
+
+
+def maxCriterion(img: Image, id: int) -> int:
+    assert id >= 0 and id < 14
+
+    if id == 0:
+        return count(img)
+    elif id == 1:
+        return -count(img)
+    elif id == 2:
+        return img.w * img.h
+    elif id == 3:
+        return -img.w * img.h
+    elif id == 4:
+        return countCols(img)
+    elif id == 5:
+        return -img.p.y
+    elif id == 6:
+        return img.p.y
+    elif id == 7:
+        return countComponents(img)
+    elif id == 8:
+        comp = compress(img)
+        return comp.w * comp.h - count(comp)
+
+    elif id == 9:
+        comp = compress(img)
+        return -(comp.w * comp.h - count(comp))
+    elif id == 10:
+        return count(interior(img))
+    elif id == 11:
+        return -count(interior(img))
+    elif id == 12:
+        return -img.p.x
+    elif id == 13:
+        return img.p.x
+
+    return -1
+
+
+def pickMax(v: List[Image], id: int) -> Image:
+    return pickMax(v, lambda img: maxCriterion(img, id))
+
+
+def cut(img: Image, a: Image) -> List[Image]:
+    ret = []
+    done = empty(img.p, img.sz)
+    d = img.p - a.p
+
+    for i in range(img.h):
+        for j in range(img.w):
+            if done[i, j] == 0 and a.safe(i + d.y, j + d.x) == 0:
+                toadd = empty(img.p, img.sz)
+
+                def dfs(r: int, c: int) -> None:
+                    if (
+                        r < 0
+                        or r >= img.h
+                        or c < 0
+                        or c >= img.w
+                        or a.safe(r + d.y, c + d.x) != 0
+                        or done[r, c] != 0
+                    ):
+                        return
+                    toadd[r, c] = img[r, c] + 1
+                    done[r, c] = 1
+                    for nr in (r - 1, r, r + 1):
+                        for nc in (c - 1, c, c + 1):
+                            dfs(nr, nc)
+
+                dfs(i, j)
+                toadd = compress(toadd)
+                for i in range(toadd.h):
+                    for j in range(toadd.w):
+                        toadd[i, j] = max(0, toadd[i, j] - 1)
+
+                ret.append(toadd)
 
     return ret
 
@@ -910,23 +1149,6 @@ def outerProductSI(a: Image, b: Image) -> Image:
     return ret
 
 
-def align(a: Image, b: Image) -> Image:
-    """Find most matching color and align a to b using it."""
-    ret = a.copy()
-    match_size = 0
-    for c in range(1, 10):
-        ca = compress(filterCol(a, c))
-        cb = compress(filterCol(b, c))
-        if ca.mask == cb.mask:
-            cnt = count(ca)
-            if cnt > match_size:
-                match_size = cnt
-                ret.p = a.p + cb.p - ca.p
-    if match_size == 0:
-        return badImg
-    return ret
-
-
 def replaceCols(base: Image, cols: Image) -> Image:
     ret = base.copy()
     done = empty(base.p, base.sz)
@@ -940,7 +1162,14 @@ def replaceCols(base: Image, cols: Image) -> Image:
                 path = []
 
                 def dfs(r: int, c: int):
-                    if r < 0 or r >= base.h or c < 0 or c >= base.w or base[r, c] != acol or done[r, c] != 0:
+                    if (
+                        r < 0
+                        or r >= base.h
+                        or c < 0
+                        or c >= base.w
+                        or base[r, c] != acol
+                        or done[r, c] != 0
+                    ):
                         return
                     cnt[cols.safe(r + d.y, c + d.x)] += 1
                     path.append((r, c))
@@ -1022,3 +1251,42 @@ def mirror(a: Image, b: Image, pad: int = 0) -> Image:
 
 def majCol(img: Image):
     return Col(majorityCol(img))
+
+
+def cutPickMax(a: Image, b: Image, id: int) -> Image:
+    return pickMax(cut(a, b), id)
+
+
+def regularCutPickMax(a: Image, id: int) -> Image:
+    b = getRegular(a)
+    return pickMax(cut(a, b), id)
+
+
+def splitPickMax(a: Image, id: int, include0: bool = False) -> Image:
+    return pickMax(splitCols(a, include0), id)
+
+
+def cutCompose(a: Image, b: Image, id: int) -> Image:
+    v = cut(a, b)
+    v = [toOrigin(img) for img in v]
+    return compose_list(v, id)
+
+
+def regularCutCompose(a: Image, id: int) -> Image:
+    b = getRegular(a)
+    v = cut(a, b)
+    v = [toOrigin(img) for img in v]
+    return compose_list(v, id)
+
+
+def splitCompose(a: Image, id: int, include0: bool = False) -> Image:
+    v = splitCols(a, include0)
+    v = [toOrigin(compress(img)) for img in v]
+    return compose(v, id)
+
+
+def cutIndex(a: Image, b: Image, ind: int) -> Image:
+    v = cut(a, b)
+    if ind < 0 or ind >= len(v):
+        return badImg
+    return v[ind]
