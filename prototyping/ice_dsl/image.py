@@ -254,7 +254,7 @@ def colMask(img: Image) -> int:
     mask = 0
     for i in range(img.h):
         for j in range(img.w):
-            mask |= 1 << img[(i, j)]
+            mask |= 1 << img[i, j]
     return mask
 
 
@@ -262,16 +262,16 @@ def countCols(img: Image) -> int:
     return len(set(img.mask))
 
 
-def count(img: Image) -> int:
+def count_nonzero(img: Image) -> int:
     ans = 0
     for i in range(img.h):
         for j in range(img.w):
-            ans += img[(i, j)] > 0
+            ans += int(img[i, j] != 0)
     return ans
 
 
 def isRectangle(a: Image) -> bool:
-    return count(a) == a.area
+    return count_nonzero(a) == a.area
 
 
 def clear_dfs(img: Image, r: int, c: int) -> None:
@@ -778,7 +778,7 @@ def align(a: Image, b: Image) -> Image:
         ca = compress(filterCol(a, c))
         cb = compress(filterCol(b, c))
         if ca.mask == cb.mask:
-            cnt = count(ca)
+            cnt = count_nonzero(ca)
             if cnt > match_size:
                 match_size = cnt
                 ret.p = a.p + cb.p - ca.p
@@ -945,7 +945,7 @@ def count(img: Image, id: int, outType: int) -> Image:
     assert outType >= 0 and outType < 3
 
     if id == 0:
-        num = count(img)
+        num = count_nonzero(img)
     elif id == 1:
         num = countCols(img)
     elif id == 2:
@@ -1048,9 +1048,9 @@ def maxCriterion(img: Image, id: int) -> int:
     assert id >= 0 and id < 14
 
     if id == 0:
-        return count(img)
+        return count_nonzero(img)
     elif id == 1:
-        return -count(img)
+        return -count_nonzero(img)
     elif id == 2:
         return img.w * img.h
     elif id == 3:
@@ -1065,15 +1065,15 @@ def maxCriterion(img: Image, id: int) -> int:
         return countComponents(img)
     elif id == 8:
         comp = compress(img)
-        return comp.w * comp.h - count(comp)
+        return comp.w * comp.h - count_nonzero(comp)
 
     elif id == 9:
         comp = compress(img)
-        return -(comp.w * comp.h - count(comp))
+        return -(comp.w * comp.h - count_nonzero(comp))
     elif id == 10:
-        return count(interior(img))
+        return count_nonzero(interior(img))
     elif id == 11:
-        return -count(interior(img))
+        return -count_nonzero(interior(img))
     elif id == 12:
         return -img.p.x
     elif id == 13:
@@ -1290,3 +1290,92 @@ def cutIndex(a: Image, b: Image, ind: int) -> Image:
     if ind < 0 or ind >= len(v):
         return badImg
     return v[ind]
+
+
+def splitAll(img: Image) -> List[Image]:
+    ret = []
+    done = empty(img.p, img.sz)
+
+    for i in range(img.h):
+        for j in range(img.w):
+            if done[i, j] == 0:
+                toadd = empty(img.p, img.sz)
+
+                def dfs(r: int, c: int, col: int) -> None:
+                    if (
+                        r < 0
+                        or r > img.h
+                        or c < 0
+                        or c >= img.w
+                        or img[r, c] != col
+                        or done[r, c] != 0
+                    ):
+                        return
+                    toadd[r, c] = img[r, c] + 1
+                    done[r, c] = 1
+                    for nr, nc in ((r + 1, c), (r - 1, c), (r, c + 1), (r, c - 1)):
+                        dfs(nr, nc, col)
+
+                dfs(i, j, img[i, j])
+                toadd = compress(toadd)
+
+                for y in range(toadd.h):
+                    for x in range(toadd.w):
+                        toadd[i, j] = max(0, toadd[i, j] - 1)
+
+            if count_nonzero(toadd) > 0:
+                ret.append(toadd)
+
+    return ret
+
+
+def eraseCol(img: Image, col: int) -> Image:
+    for i in range(img.h):
+        for j in range(img.w):
+            if img[i, j] == col:
+                img[i, j] = 0
+    return img
+
+
+def splitColumns(img: Image) -> List[Image]:
+    ret = []
+    if img.area > 0:
+        for j in range(img.w):
+            ret.append(Image(Point(j, 0), Point(1, img.h), [img.mask[i,j] for i in range(img.h)]))
+            
+    return ret
+
+
+def splitRows(img: Image) -> List[Image]:
+    ret = []
+    if img.area > 0:
+        for i in range(img.h):
+            ret.append(Image(Point(0, i), Point(img.w, 1), [img.mask[i,j] for j in range(img.w)]))
+    return ret
+
+
+def half(img: Image, id: int) -> Image:
+    assert id >= 0 and id < 4
+    if id == 0:
+        return subImage(img, Point(0, 0), Point(img.w / 2, img.h))
+    elif id == 1:
+        return subImage(img, Point(img.w - img.w / 2, 0), Point(img.w / 2, img.h))
+    elif id == 2:
+        return subImage(img, Point(0, 0), Point(img.w, img.h / 2))
+    elif id == 3:
+        return subImage(img, Point(0, img.h - img.h / 2), Point(img.w, img.h / 2))
+    else:
+        return badImg
+
+
+def mirror2(a: Image, line: Image) -> Image:
+    if line.w > line.h:
+        ret = rigid(a, 5)
+        ret.x = a.x
+        ret.y = line.y * 2 + line.h - a.y - a.h
+    else:
+        ret = rigid(a, 4)
+        ret.y = a.y
+        ret.x = line.x * 2 + line.w - a.x - a.w
+
+    return ret
