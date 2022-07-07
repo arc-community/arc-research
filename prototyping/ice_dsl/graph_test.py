@@ -3,6 +3,7 @@ from arc.interface import Riddle, Board
 from arc.utils import dataset
 from enum import Enum
 import random
+from functools import partial
 from image import (
     Point,
     Image,
@@ -149,11 +150,8 @@ class NodeGraph:
 def register_functions(f: NodeFactory):
     f.register("majorityCol", majorityCol, ParameterType.Image, [ParameterType.Image])
 
-    def make_rigid(i: int):
-        return lambda img: rigid(img, i)
-
     for i in range(8):
-        f.register(f"rigid{i}", make_rigid(i), ParameterType.Image, [ParameterType.Image])
+        f.register(f"rigid{i}", partial(rigid, id=i), ParameterType.Image, [ParameterType.Image])
     f.register("invert", invert, ParameterType.Image, [ParameterType.Image])
     f.register(
         "mirror", mirror, ParameterType.Image, [ParameterType.Image, ParameterType.Image]
@@ -172,13 +170,10 @@ def register_functions(f: NodeFactory):
     )
     f.register("wrap", wrap, ParameterType.Image, [ParameterType.Image, ParameterType.Image])
 
-    def make_mystack(i: int):
-        return lambda a, b: myStack(a, b, i)
-    
     for i in range(4):
         f.register(
             f"myStack{i}",
-            make_mystack(i),
+            partial(myStack, orient=i),
             ParameterType.Image,
             [ParameterType.Image, ParameterType.Image],
         )
@@ -186,18 +181,14 @@ def register_functions(f: NodeFactory):
     f.register("border", border, ParameterType.Image, [ParameterType.Image])
     f.register("splitAll", splitAll, ParameterType.ImageList, [ParameterType.Image])
 
-    def make_compose(i: int):
-        return lambda a, b: compose(a, b, i)
-    def make_compose_list(i: int):
-        return lambda xs: compose_list(xs, i)
     for i in range(5):
         f.register(
             f"compose{i}",
-            make_compose(i),
+            partial(compose, id=i),
             ParameterType.Image,
             [ParameterType.Image, ParameterType.Image],
         )
-        f.register(f"compose_list{i}", make_compose_list(i), ParameterType.Image, [ParameterType.ImageList])
+        f.register(f"compose_list{i}", partial(compose_list, id=i), ParameterType.Image, [ParameterType.ImageList])
     f.register("fill", fill, ParameterType.Image, [ParameterType.Image])
     f.register("filterCol", lambda a,b: filterCol(a, b), ParameterType.Image, [ParameterType.Image, ParameterType.Image])
     return f
