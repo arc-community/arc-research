@@ -551,8 +551,8 @@ def compress(img: Image, bg: Image = Col(0)):
         return badImg
 
     ret = empty(img.p + Point(xmi, ymi), Point(xma - xmi + 1, yma - ymi + 1))
-    for i in range(ymi, yma):
-        for j in range(xmi, xma):
+    for i in range(ymi, yma+1):
+        for j in range(xmi, xma+1):
             ret[i - ymi, j - xmi] = img[i, j]
 
     return ret

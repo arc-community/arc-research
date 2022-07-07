@@ -82,29 +82,24 @@ def main():
 
         # typer.echo(riddle.fmt(colored=True, with_test_outputs=False))
 
+    print("compress")
     x = full((1, 1), (10, 10))
     x[5, 5] = 1
     x[7, 6] = 1
     y = compress(x)
+    print_image(y)
     print(y.sz)
 
     print("fill:")
-    typer.echo(image_to_board(fill(Image((0, 0), (4, 4), [1, 1, 1, 1, 1, 0, 0, 1, 1, 0, 0, 1, 1, 1, 1, 1]))).fmt(True))
+    print_image(fill(Image((0, 0), (4, 4), [1, 1, 1, 1, 1, 0, 0, 1, 1, 0, 0, 1, 1, 1, 1, 1])))
     print("border")
-    typer.echo(
-        image_to_board(border(Image((0, 0), (4, 4), [0, 1, 1, 1, 0, 1, 0, 1, 0, 1, 2, 1, 1, 1, 1, 1]))).fmt(True)
-    )
-    print("interior")
-    typer.echo(
-        image_to_board(interior(Image((0, 0), (4, 4), [1, 1, 1, 1, 1, 0, 0, 1, 1, 0, 2, 1, 1, 1, 1, 1]))).fmt(True)
-    )
-    print("interior2")
-    typer.echo(
-        image_to_board(interior2(Image((0, 0), (4, 4), [1, 1, 1, 1, 1, 0, 0, 1, 1, 0, 2, 1, 1, 1, 1, 1]))).fmt(True)
-    )
+    print_image(border(Image((0, 0), (4, 4), [0, 1, 1, 1, 0, 1, 0, 1, 0, 1, 2, 1, 1, 1, 1, 1])))
 
-    def print_image(img):
-        typer.echo(image_to_board(img).fmt(True))
+    print("interior")
+    print_image(interior(Image((0, 0), (4, 4), [1, 1, 1, 1, 1, 0, 0, 1, 1, 0, 2, 1, 1, 1, 1, 1])))
+
+    print("interior2")
+    print_image(interior2(Image((0, 0), (4, 4), [1, 1, 1, 1, 1, 0, 0, 1, 1, 0, 2, 1, 1, 1, 1, 1])))
 
     p0 = Image((0, 0), (5, 4), [1, 1, 1, 1, 4, 1, 0, 2, 0, 1, 1, 2, 0, 2, 1, 5, 1, 1, 1, 6])
 
