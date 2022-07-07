@@ -147,12 +147,16 @@ class NodeGraph:
 
 
 def register_functions(f: NodeFactory):
-    f.register("majorityCol", lambda img: majorityCol(img), ParameterType.Image, [ParameterType.Image])
-    for i0 in range(8):
-        f.register(f"rigid{i0}", lambda img: rigid(img, i0), ParameterType.Image, [ParameterType.Image])
+    f.register("majorityCol", majorityCol, ParameterType.Image, [ParameterType.Image])
+
+    def make_rigid(i: int):
+        return lambda img: rigid(img, i)
+
+    for i in range(8):
+        f.register(f"rigid{i}", make_rigid(i), ParameterType.Image, [ParameterType.Image])
     f.register("invert", invert, ParameterType.Image, [ParameterType.Image])
     f.register(
-        "mirror", lambda a, b: mirror(a, b, pad=0), ParameterType.Image, [ParameterType.Image, ParameterType.Image]
+        "mirror", mirror, ParameterType.Image, [ParameterType.Image, ParameterType.Image]
     )
     f.register(
         "mirror_pad",
@@ -162,29 +166,38 @@ def register_functions(f: NodeFactory):
     )
     f.register(
         "replaceCols",
-        lambda a, b: replaceCols(a, b),
+        replaceCols,
         ParameterType.Image,
         [ParameterType.Image, ParameterType.Image],
     )
     f.register("wrap", wrap, ParameterType.Image, [ParameterType.Image, ParameterType.Image])
-    for i1 in range(4):
+
+    def make_mystack(i: int):
+        return lambda a, b: myStack(a, b, i)
+    
+    for i in range(4):
         f.register(
-            f"myStack{i1}",
-            lambda a, b: myStack(a, b, i1),
+            f"myStack{i}",
+            make_mystack(i),
             ParameterType.Image,
             [ParameterType.Image, ParameterType.Image],
         )
     f.register("compress", lambda x: compress(x), ParameterType.Image, [ParameterType.Image])
     f.register("border", border, ParameterType.Image, [ParameterType.Image])
     f.register("splitAll", splitAll, ParameterType.ImageList, [ParameterType.Image])
-    for i2 in range(5):
+
+    def make_compose(i: int):
+        return lambda a, b: compose(a, b, i)
+    def make_compose_list(i: int):
+        return lambda xs: compose_list(xs, i)
+    for i in range(5):
         f.register(
-            f"compose{i2}",
-            lambda a, b: compose(a, b, i2),
+            f"compose{i}",
+            make_compose(i),
             ParameterType.Image,
             [ParameterType.Image, ParameterType.Image],
         )
-        f.register(f"compose_list{i2}", lambda xs: compose_list(xs, i2), ParameterType.Image, [ParameterType.ImageList])
+        f.register(f"compose_list{i}", make_compose_list(i), ParameterType.Image, [ParameterType.ImageList])
     f.register("fill", fill, ParameterType.Image, [ParameterType.Image])
     f.register("filterCol", lambda a,b: filterCol(a, b), ParameterType.Image, [ParameterType.Image, ParameterType.Image])
     return f
