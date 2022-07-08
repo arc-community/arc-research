@@ -250,7 +250,7 @@ def empty(*args):
         return full(p, sz, 0)
 
 
-def colMask(img: Image) -> int:
+def color_mask(img: Image) -> int:
     mask = 0
     for i in range(img.h):
         for j in range(img.w):
@@ -258,7 +258,7 @@ def colMask(img: Image) -> int:
     return mask
 
 
-def countCols(img: Image) -> int:
+def count_colors(img: Image) -> int:
     return len(set(img.mask))
 
 
@@ -283,7 +283,7 @@ def clear_dfs(img: Image, r: int, c: int) -> None:
                 clear_dfs(img, nr, nc)
 
 
-def countComponents(img: Image) -> int:
+def count_components(img: Image) -> int:
     """Count number of"""
     img = img.copy()
     ans = 0
@@ -296,7 +296,7 @@ def countComponents(img: Image) -> int:
     return ans
 
 
-def subImage(img: Image, p: Point, sz: Point) -> Image:
+def sub_image(img: Image, p: Point, sz: Point) -> Image:
     assert (
         p.x >= 0
         and p.y >= 0
@@ -312,7 +312,7 @@ def subImage(img: Image, p: Point, sz: Point) -> Image:
     )
 
 
-def majorityCol(img: Image, include0: bool = False) -> int:
+def majority_color(img: Image, include0: bool = False) -> int:
     cnt = [0] * 10
 
     for i in range(img.h):
@@ -334,9 +334,9 @@ def majorityCol(img: Image, include0: bool = False) -> int:
     return ret
 
 
-def splitCols(img: Image, include0: bool = False) -> List[Image]:
+def split_colors(img: Image, include0: bool = False) -> List[Image]:
     ret = []
-    mask = colMask(img)
+    mask = color_mask(img)
     for c in range(int(include0), 10):
         if mask >> c & 1:
             ret.append(Image(img.p, img.sz, [int(x == c) for x in img.mask]))
@@ -366,39 +366,39 @@ def Line(orient: int, id: int) -> Image:
     return full((0, 0), (w, h))
 
 
-def getPos(img: Image) -> Image:
-    return full(img.p, Point(1, 1), majorityCol(img))
+def get_pos(img: Image) -> Image:
+    return full(img.p, Point(1, 1), majority_color(img))
 
 
-def getSize(img: Image) -> Image:
-    return full(Point(0, 0), img.sz, majorityCol(img))
+def get_size(img: Image) -> Image:
+    return full(Point(0, 0), img.sz, majority_color(img))
 
 
-def getSize0(img: Image) -> Image:
+def get_size0(img: Image) -> Image:
     return full(Point(0, 0), img.sz, 0)
 
 
 def hull(img: Image) -> Image:
-    return full(img.p, img.sz, majorityCol(img))
+    return full(img.p, img.sz, majority_color(img))
 
 
 def hull0(img: Image) -> Image:
     return full(img.p, img.sz, 0)
 
 
-def toOrigin(img: Image) -> Image:
+def to_origin(img: Image) -> Image:
     return Image(Point(0, 0), img.sz, img.mask)
 
 
-def getW(img: Image, id: int) -> Image:
-    return full(Point(0, 0), Point(img.w, 1 if id == 0 else img.w), majorityCol(img))
+def get_Width(img: Image, id: int) -> Image:
+    return full(Point(0, 0), Point(img.w, 1 if id == 0 else img.w), majority_color(img))
 
 
-def getH(img: Image, id: int) -> Image:
-    return full(Point(0, 0), Point(1 if id == 0 else img.h, img.h), majorityCol(img))
+def get_Height(img: Image, id: int) -> Image:
+    return full(Point(0, 0), Point(1 if id == 0 else img.h, img.h), majority_color(img))
 
 
-def Move(img: Image, p: Image) -> Image:
+def move(img: Image, p: Image) -> Image:
     return Image(img.p + p.p, img.sz, img.mask)
 
 
@@ -406,7 +406,7 @@ def invert(img: Image) -> Image:
     if img.area == 0:
         return img
 
-    mask = colMask(img)
+    mask = color_mask(img)
     col = 1
     while col < 10 and (mask >> col & 1) == 0:
         col += 1
@@ -416,29 +416,18 @@ def invert(img: Image) -> Image:
     return img.map(lambda i, j, x: 0 if x != 0 else col)
 
 
-@overload
-def filterCol(img: Image, palette: Image) -> Image:
-    ...
+def filter_color_palette(img: Image, palette: Image) -> Image:
+    col_mask = color_mask(palette)
+    filtered = [x if (col_mask >> x) & 1 else 0 for x in img.mask]
+    return Image(img.p, img.sz, filtered)
 
 
-@overload
-def filterCol(img: Image, id: int) -> Image:
-    ...
-
-
-def filterCol(*args) -> Image:
-    if type(args[1]) == Image:
-        img, palette = args
-        col_mask = colMask(palette)
-        filtered = [x if (col_mask >> x) & 1 else 0 for x in img.mask]
-        return Image(img.p, img.sz, filtered)
+def filter_color(img: Image, id: int) -> Image:
+    assert id >= 0 and id < 10
+    if id == 0:
+        return invert(img)
     else:
-        img, id = args
-        assert id >= 0 and id < 10
-        if id == 0:
-            return invert(img)
-        else:
-            return filterCol(img, Col(id))
+        return filter_color_palette(img, Col(id))
 
 
 def broadcast(col: Image, shape: Image, include0: bool = True) -> Image:
@@ -513,11 +502,11 @@ def broadcast(col: Image, shape: Image, include0: bool = True) -> Image:
     return ret
 
 
-def colShape(col: Image, shape: Image) -> Image:
-    """Return a resized copy of col with the size of shape with all pixels set to 0 that where 0 in shape"""
+def color_shape(col: Image, shape: Image) -> Image:
+    """Return a resized copy of col with the size of shape with all pixels set to 0 that are 0 in shape"""
     if shape.area == 0 or col.area == 0:
         return badImg
-    ret = broadcast(col, getSize(shape))
+    ret = broadcast(col, get_size(shape))
     ret.p = shape.p
     for i in range(ret.h):
         for j in range(ret.h):
@@ -526,7 +515,7 @@ def colShape(col: Image, shape: Image) -> Image:
     return ret
 
 
-def colShape(shape: Image, id: int) -> Image:
+def color_shape_const(shape: Image, id: int) -> Image:
     """Set any non-zero pixel in image to the color specified by id."""
     assert id >= 0 and id < 10
     return Image(shape.p, shape.sz, [id if x != 0 else 0 for x in shape.mask])
@@ -534,7 +523,7 @@ def colShape(shape: Image, id: int) -> Image:
 
 def compress(img: Image, bg: Image = Col(0)):
     """Remove all border columns and rows which exclusively contain colors found in bg."""
-    bg_mask = colMask(bg)
+    bg_mask = color_mask(bg)
 
     xmi, ymi = 1e9, 1e9
     xma, yma = 0, 0
@@ -551,8 +540,8 @@ def compress(img: Image, bg: Image = Col(0)):
         return badImg
 
     ret = empty(img.p + Point(xmi, ymi), Point(xma - xmi + 1, yma - ymi + 1))
-    for i in range(ymi, yma+1):
-        for j in range(xmi, xma+1):
+    for i in range(ymi, yma + 1):
+        for j in range(xmi, xma + 1):
             ret[i - ymi, j - xmi] = img[i, j]
 
     return ret
@@ -619,6 +608,10 @@ def compose(a: Image, b: Image, id: int = 0) -> Image:
         return compose_internal(
             a, b, lambda a, b: 0 if b != 0 else a, 2
         )  # a masked by inverse of b, inside of a
+    elif id == 5:
+        return compose_internal(
+            a, b, lambda a, b: max(a, b), 0
+        )  # max(a, b), inside either
     else:
         assert id >= 0 and id < 5
     return badImg
@@ -635,7 +628,7 @@ def compose_list(imgs: List[Image], id: int) -> Image:
 
 def fill(a: Image) -> Image:
     """Fill internal areas enclosed by non-zero borders with majority color."""
-    ret = full(a.p, a.sz, majorityCol(a, False))
+    ret = full(a.p, a.sz, majority_color(a, False))
 
     q = []
     for i in range(a.h):
@@ -770,13 +763,13 @@ def align(a: Image, b: Image, idx: int, idy: int) -> Image:
     return ret
 
 
-def align(a: Image, b: Image) -> Image:
+def align_color(a: Image, b: Image) -> Image:
     """Find most matching color and align a to b using it."""
     ret = a.copy()
     match_size = 0
     for c in range(1, 10):
-        ca = compress(filterCol(a, c))
-        cb = compress(filterCol(b, c))
+        ca = compress(filter_color(a, c))
+        cb = compress(filter_color(b, c))
         if ca.mask == cb.mask:
             cnt = count_nonzero(ca)
             if cnt > match_size:
@@ -851,7 +844,7 @@ def transform(img: Image, A00: int, A01: int, A10: int, A11: int) -> Image:
     return ret
 
 
-def mirrorHeuristic(img: Image) -> int:
+def mirror_heuristic(img: Image) -> int:
     # Meant to be used for mirroring, flip either x or y, depending on center of gravity
     cnt, sumx, sumy = 0, 0, 0
     for i in range(img.h):
@@ -889,7 +882,7 @@ def rigid(img: Image, id: int) -> Image:
         return transform(img, 0, -1, -1, 0)
         # swap other diagonal
     elif id == 8:
-        return rigid(img, 4 + mirrorHeuristic(img))
+        return rigid(img, 4 + mirror_heuristic(img))
     else:
         assert id >= 0 and id < 9
         return badImg
@@ -918,7 +911,7 @@ def get_regular_internal(col: List):
         col[i] = False
 
 
-def getRegular(img: Image) -> Image:
+def get_regular(img: Image) -> Image:
     """Look for regular grid division in single color"""
     ret = img.copy()
 
@@ -940,16 +933,16 @@ def getRegular(img: Image) -> Image:
     return ret
 
 
-def count(img: Image, id: int, outType: int) -> Image:
+def count(img: Image, id: int, out_type: int) -> Image:
     assert id >= 0 and id < 7
-    assert outType >= 0 and outType < 3
+    assert out_type >= 0 and out_type < 3
 
     if id == 0:
         num = count_nonzero(img)
     elif id == 1:
-        num = countCols(img)
+        num = count_colors(img)
     elif id == 2:
-        num = countComponents(img)
+        num = count_components(img)
     elif id == 3:
         num = img.w
     elif id == 4:
@@ -961,21 +954,21 @@ def count(img: Image, id: int, outType: int) -> Image:
     else:
         assert False
 
-    if outType == 0:
+    if out_type == 0:
         sz = Point(num, num)
-    elif outType == 1:
+    elif out_type == 1:
         sz = Point(num, 1)
-    elif outType == 2:
+    elif out_type == 2:
         sz = Point(1, num)
     else:
         raise ValueError("Unsupported output type")
 
     if max(sz.x, sz.y) > MAXSIDE or sz.x * sz.y > MAXAREA:
         return badImg
-    return full(sz, majorityCol(img))
+    return full(sz, majority_color(img))
 
 
-def myStack(a: Image, b: Image, orient: int) -> Image:
+def my_stack(a: Image, b: Image, orient: int) -> Image:
     assert orient >= 0 and orient <= 3
     b = Image(a.p, b.sz, b.mask)
     if orient == 0:  # Horizontal
@@ -1016,6 +1009,118 @@ def wrap(line: Image, area: Image) -> Image:
     return ans
 
 
+def smear(img: Image, id: int) -> Image:
+    assert id >= 0 and id < 15
+
+    R, L, D, U = (1, 0), (-1, 0), (0, 1), (0, -1)
+    X, Y, Z, W = (1, 1), (-1, -1), (1, -1), (-1, 1)
+    d = [
+        [R],
+        [L],
+        [D],
+        [U],
+        [R, L],
+        [D, U],
+        [R, L, D, U],
+        [X],
+        [Y],
+        [Z],
+        [W],
+        [X, Y],
+        [Z, W],
+        [X, Y, Z, W],
+        [R, L, D, U, X, Y, Z, W],
+    ]
+    w = img.w
+    ret = img.copy()
+
+    for dx, dy in d[id]:
+        di = dy * w + dx
+
+        for i in range(ret.h):
+            step = 1 if i == 0 or i == ret.h - 1 else max(ret.w - 1, 1)
+            for j in range(0, ret.w, step):
+
+                if i - dy < 0 or j - dx < 0 or i - dy >= img.h or j - dx >= img.w:
+                    steps = MAXSIDE
+                    
+                    if dx == -1:
+                        steps = min(steps, j + 1)
+                    if dx == 1:
+                        steps = min(steps, img.w - j)
+                    if dy == -1:
+                        steps = min(steps, i + 1)
+                    if dy == 1:
+                        steps = min(steps, img.h - i)
+
+                    ind = i * w + j
+                    end_ind = ind + steps * di
+                    c = 0
+                    for ind in range(ind, end_ind, di):
+                        if img.mask[ind]:
+                            c = img.mask[ind]
+                        if c != 0:
+                            ret.mask[ind] = c
+
+    return ret
+
+"""
+def smear(base: Image, room: Image, id: int) -> Image:
+    assert id >= 0 and id < 7
+
+    arr = [1, 2, 4, 8, 3, 12, 15]
+    mask = arr[id]
+
+    d = room.p - base.p
+
+    ret = embed(base, hull(room))
+    if mask & 1:
+        for i in range(ret.h):
+            c = 0
+            for j in range(ret.w):
+                if room[i, j] == 0:
+                    c = 0
+                elif base.safe(i + d.y, j + d.x) != 0:
+                    c = base[i + d.y, j + d.x]
+                if c != 0:
+                    ret[i, j] = c
+
+    if (mask >> 1) & 1:
+        for i in range(ret.h):
+            c = 0
+            for j in range(ret.w - 1, -1, -1):
+                if room[i, j] == 0:
+                    c = 0
+                elif base.safe(i + d.y, j + d.x) != 0:
+                    c = base[i + d.y, j + d.x]
+                if c != 0:
+                    ret[i, j] = c
+
+    if (mask >> 2) & 1:
+        for j in range(ret.w):
+            c = 0
+            for i in range(ret.h):
+                if room[i, j] == 0:
+                    c = 0
+                elif base.safe(i + d.y, j + d.x) != 0:
+                    c = base[i + d.y, j + d.x]
+                if c != 0:
+                    ret[i, j] = c
+
+    if (mask >> 3) & 1:
+        for j in range(ret.w):
+            c = 0
+            for i in range(ret.h - 1, -1, -1):
+                if room[i, j] == 0:
+                    c = 0
+                elif base.safe(i + d.y, j + d.x) != 0:
+                    c = base[i + d.y, j + d.x]
+                if c != 0:
+                    ret[i, j] = c
+
+    return ret
+"""
+
 def clamp(x, lo, hi):
     if x < lo:
         return lo
@@ -1038,13 +1143,13 @@ def extend(img: Image, room: Image) -> Image:
     return ret
 
 
-def pickMax(v: List[Image], f: Callable[[Image], int]) -> Image:
+def pick_max(v: List[Image], f: Callable[[Image], int]) -> Image:
     if len(v) == 0:
         return badImg
     return max(v, key=f)
 
 
-def maxCriterion(img: Image, id: int) -> int:
+def max_criterion(img: Image, id: int) -> int:
     assert id >= 0 and id < 14
 
     if id == 0:
@@ -1056,13 +1161,13 @@ def maxCriterion(img: Image, id: int) -> int:
     elif id == 3:
         return -img.w * img.h
     elif id == 4:
-        return countCols(img)
+        return count_colors(img)
     elif id == 5:
         return -img.p.y
     elif id == 6:
         return img.p.y
     elif id == 7:
-        return countComponents(img)
+        return count_components(img)
     elif id == 8:
         comp = compress(img)
         return comp.w * comp.h - count_nonzero(comp)
@@ -1082,8 +1187,8 @@ def maxCriterion(img: Image, id: int) -> int:
     return -1
 
 
-def pickMax(v: List[Image], id: int) -> Image:
-    return pickMax(v, lambda img: maxCriterion(img, id))
+def pick_max(v: List[Image], id: int) -> Image:
+    return pick_max(v, lambda img: max_criterion(img, id))
 
 
 def cut(img: Image, a: Image) -> List[Image]:
@@ -1123,7 +1228,7 @@ def cut(img: Image, a: Image) -> List[Image]:
     return ret
 
 
-def outerProductIS(a: Image, b: Image) -> Image:
+def outer_product_is(a: Image, b: Image) -> Image:
     if a.w * b.w > MAXSIDE or a.h * b.h > MAXSIDE or a.w * b.w * a.h * b.h > MAXAREA:
         return badImg
     rpos = Point(a.p.x * b.w + b.p.x, a.p.y * b.h + b.p.y)
@@ -1136,7 +1241,7 @@ def outerProductIS(a: Image, b: Image) -> Image:
     return ret
 
 
-def outerProductSI(a: Image, b: Image) -> Image:
+def outer_product_si(a: Image, b: Image) -> Image:
     if a.w * b.w > MAXSIDE or a.h * b.h > MAXSIDE or a.w * b.w * a.h * b.h > MAXAREA:
         return badImg
     rpos = Point(a.x * b.w + b.x, a.y * b.h + b.y)
@@ -1149,7 +1254,7 @@ def outerProductSI(a: Image, b: Image) -> Image:
     return ret
 
 
-def replaceCols(base: Image, cols: Image) -> Image:
+def replace_colors(base: Image, cols: Image) -> Image:
     ret = base.copy()
     done = empty(base.p, base.sz)
     d = base.p - cols.p
@@ -1249,50 +1354,50 @@ def mirror(a: Image, b: Image, pad: int = 0) -> Image:
     return ret
 
 
-def majCol(img: Image):
-    return Col(majorityCol(img))
+def majority_color_image(img: Image):
+    return Col(majority_color(img))
 
 
-def cutPickMax(a: Image, b: Image, id: int) -> Image:
-    return pickMax(cut(a, b), id)
+def cut_pick_max(a: Image, b: Image, id: int) -> Image:
+    return pick_max(cut(a, b), id)
 
 
-def regularCutPickMax(a: Image, id: int) -> Image:
-    b = getRegular(a)
-    return pickMax(cut(a, b), id)
+def regular_cut_pick_max(a: Image, id: int) -> Image:
+    b = get_regular(a)
+    return pick_max(cut(a, b), id)
 
 
-def splitPickMax(a: Image, id: int, include0: bool = False) -> Image:
-    return pickMax(splitCols(a, include0), id)
+def split_pick_max(a: Image, id: int, include0: bool = False) -> Image:
+    return pick_max(split_colors(a, include0), id)
 
 
-def cutCompose(a: Image, b: Image, id: int) -> Image:
+def cut_compose(a: Image, b: Image, id: int) -> Image:
     v = cut(a, b)
-    v = [toOrigin(img) for img in v]
+    v = [to_origin(img) for img in v]
     return compose_list(v, id)
 
 
-def regularCutCompose(a: Image, id: int) -> Image:
-    b = getRegular(a)
+def regular_cut_compose(a: Image, id: int) -> Image:
+    b = get_regular(a)
     v = cut(a, b)
-    v = [toOrigin(img) for img in v]
+    v = [to_origin(img) for img in v]
     return compose_list(v, id)
 
 
-def splitCompose(a: Image, id: int, include0: bool = False) -> Image:
-    v = splitCols(a, include0)
-    v = [toOrigin(compress(img)) for img in v]
+def split_compose(a: Image, id: int, include0: bool = False) -> Image:
+    v = split_colors(a, include0)
+    v = [to_origin(compress(img)) for img in v]
     return compose(v, id)
 
 
-def cutIndex(a: Image, b: Image, ind: int) -> Image:
+def cut_index(a: Image, b: Image, ind: int) -> Image:
     v = cut(a, b)
     if ind < 0 or ind >= len(v):
         return badImg
     return v[ind]
 
 
-def splitAll(img: Image) -> List[Image]:
+def split_all(img: Image) -> List[Image]:
     ret = []
     done = empty(img.p, img.sz)
 
@@ -1329,7 +1434,7 @@ def splitAll(img: Image) -> List[Image]:
     return ret
 
 
-def eraseCol(img: Image, col: int) -> Image:
+def erase_color(img: Image, col: int) -> Image:
     for i in range(img.h):
         for j in range(img.w):
             if img[i, j] == col:
@@ -1337,33 +1442,41 @@ def eraseCol(img: Image, col: int) -> Image:
     return img
 
 
-def splitColumns(img: Image) -> List[Image]:
+def split_columns(img: Image) -> List[Image]:
     ret = []
     if img.area > 0:
         for j in range(img.w):
-            ret.append(Image(Point(j, 0), Point(1, img.h), [img.mask[i,j] for i in range(img.h)]))
-            
+            ret.append(
+                Image(
+                    Point(j, 0), Point(1, img.h), [img.mask[i, j] for i in range(img.h)]
+                )
+            )
+
     return ret
 
 
-def splitRows(img: Image) -> List[Image]:
+def split_rows(img: Image) -> List[Image]:
     ret = []
     if img.area > 0:
         for i in range(img.h):
-            ret.append(Image(Point(0, i), Point(img.w, 1), [img.mask[i,j] for j in range(img.w)]))
+            ret.append(
+                Image(
+                    Point(0, i), Point(img.w, 1), [img.mask[i, j] for j in range(img.w)]
+                )
+            )
     return ret
 
 
 def half(img: Image, id: int) -> Image:
     assert id >= 0 and id < 4
     if id == 0:
-        return subImage(img, Point(0, 0), Point(img.w / 2, img.h))
+        return sub_image(img, Point(0, 0), Point(img.w / 2, img.h))
     elif id == 1:
-        return subImage(img, Point(img.w - img.w / 2, 0), Point(img.w / 2, img.h))
+        return sub_image(img, Point(img.w - img.w / 2, 0), Point(img.w / 2, img.h))
     elif id == 2:
-        return subImage(img, Point(0, 0), Point(img.w, img.h / 2))
+        return sub_image(img, Point(0, 0), Point(img.w, img.h / 2))
     elif id == 3:
-        return subImage(img, Point(0, img.h - img.h / 2), Point(img.w, img.h / 2))
+        return sub_image(img, Point(0, img.h - img.h / 2), Point(img.w, img.h / 2))
     else:
         return badImg
 

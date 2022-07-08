@@ -7,10 +7,23 @@ from functools import partial
 from image import (
     Point,
     Image,
+    center,
+    color_shape_const,
+    count,
     empty,
-    majorityCol,
-    subImage,
-    splitCols,
+    erase_color,
+    filter_color,
+    get_pos,
+    get_size,
+    get_size0,
+    half,
+    hull,
+    hull0,
+    majority_color,
+    majority_color_image,
+    smear,
+    sub_image,
+    split_colors,
     invert,
     filterCol,
     broadcast,
@@ -21,16 +34,17 @@ from image import (
     interior,
     interior2,
     rigid,
-    getRegular,
-    myStack,
+    get_regular,
+    my_stack,
+    to_origin,
     wrap,
     extend,
-    outerProductIS,
-    outerProductSI,
-    replaceCols,
+    outer_product_is,
+    outer_product_si,
+    replace_colors,
     repeat,
     mirror,
-    splitAll,
+    split_all,
     compose,
     compose_list,
 )
@@ -119,7 +133,12 @@ class NodeFactory:
         self.next_id = 1
 
     def register(self, name: str, fn, returnType: ParameterType, parameterTypes: List[ParameterType]):
+        assert returnType in (ParameterType.Image, ParameterType.ImageList)
+        assert parameterTypes != None and len(parameterTypes) > 0
         self.functions[name] = Function(name, fn, returnType, parameterTypes)
+
+    def register_unary(self, name: str, fn):
+        self.register(name, fn, returnType=ParameterType.Image, parameterTypes=[ParameterType.Image])
 
     def create_node(self, function_name) -> FunctionNode:
         fn = self.functions[function_name]
@@ -160,10 +179,42 @@ class NodeGraph:
 
 
 def register_functions(f: NodeFactory):
-    f.register("majorityCol", majorityCol, ParameterType.Image, [ParameterType.Image])
 
-    for i in range(8):
-        f.register(f"rigid{i}", partial(rigid, id=i), ParameterType.Image, [ParameterType.Image])
+    for i in range(10):
+        f.register_unary(f"filter_color{i}", partial(filter_color, id=i))
+    for i in range(10):
+        f.register_unary(f"erase_color{i}", partial(erase_color, col=i))
+    for i in range(10):
+        f.register_unary(f"color_shape_const{i}", partial(color_shape_const, id=i))
+
+    f.register_unary("compress", compress)
+    f.register_unary("get_pos", get_pos)
+    f.register_unary("get_size", get_size)
+    f.register_unary("get_size0", get_size0)
+    f.register_unary("hull", hull)
+    f.register_unary("hull0", hull0)
+    f.register_unary("to_origin", to_origin)
+    f.register_unary("fill", fill)
+    f.register_unary("interior", interior)
+    f.register_unary("interior2", interior2)
+    f.register_unary("border", border)
+    f.register_unary("center", center)
+    f.register_unary("majority_color_image", majority_color_image)
+
+    for i in range(1,9):
+        f.register_unary(f"rigid{i}", partial(rigid, id=i))
+
+    for a in range(3):
+        for b in range(3):
+            f.register_unary("count_{a}_{b}", partial(count, id=a, out_type=b))
+
+    for i in range(15):
+        f.register_unary(f"smear_{i}", partial(smear, id=i))
+
+    for i in range(4):
+        f.register_unary(f"half{i}", partial(half, id=i))
+
+    
     f.register("invert", invert, ParameterType.Image, [ParameterType.Image])
     f.register(
         "mirror", mirror, ParameterType.Image, [ParameterType.Image, ParameterType.Image]
@@ -176,7 +227,7 @@ def register_functions(f: NodeFactory):
     )
     f.register(
         "replaceCols",
-        replaceCols,
+        replace_colors,
         ParameterType.Image,
         [ParameterType.Image, ParameterType.Image],
     )
@@ -185,15 +236,14 @@ def register_functions(f: NodeFactory):
     for i in range(4):
         f.register(
             f"myStack{i}",
-            partial(myStack, orient=i),
+            partial(my_stack, orient=i),
             ParameterType.Image,
             [ParameterType.Image, ParameterType.Image],
         )
-    f.register("compress", lambda x: compress(x), ParameterType.Image, [ParameterType.Image])
     f.register("border", border, ParameterType.Image, [ParameterType.Image])
-    f.register("splitAll", splitAll, ParameterType.ImageList, [ParameterType.Image])
+    f.register("splitAll", split_all, ParameterType.ImageList, [ParameterType.Image])
 
-    for i in range(5):
+    for i in range(6):
         f.register(
             f"compose{i}",
             partial(compose, id=i),

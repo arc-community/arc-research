@@ -5,11 +5,11 @@ from image import (
     Point,
     Image,
     empty,
-    majorityCol,
-    subImage,
-    splitCols,
+    majority_color,
+    sub_image,
+    split_colors,
     invert,
-    filterCol,
+    filter_color,
     broadcast,
     full,
     compress,
@@ -18,18 +18,19 @@ from image import (
     interior,
     interior2,
     rigid,
-    getRegular,
-    myStack,
+    get_regular,
+    my_stack,
     wrap,
     extend,
-    outerProductIS,
-    outerProductSI,
-    replaceCols,
+    outer_product_is,
+    outer_product_si,
+    replace_colors,
     repeat,
     mirror,
-    splitAll,
+    split_all,
     compose,
     compose_list,
+    smear
 )
 
 import typer
@@ -57,8 +58,8 @@ def main():
 
         b = riddle.train[0].output
         img = board_to_image(b)
-        img = subImage(img, Point(2, 2), Point(4, 4))
-        print("maj col:", majorityCol(img))
+        img = sub_image(img, Point(2, 2), Point(4, 4))
+        print("maj col:", majority_color(img))
 
         print("img", img)
 
@@ -69,13 +70,13 @@ def main():
         typer.echo(image_to_board(y).fmt(colored=True))
         typer.echo(image_to_board(img).fmt(colored=True))
 
-        a = splitCols(img)
+        a = split_colors(img)
         for x in a:
             typer.echo(image_to_board(x).fmt(True))
             print()
             typer.echo(image_to_board(invert(x)).fmt(True))
             print()
-            typer.echo(image_to_board(filterCol(x, 2)).fmt(True))
+            typer.echo(image_to_board(filter_color(x, 2)).fmt(True))
 
         print(a)
         typer.echo(b2.fmt(colored=True))
@@ -140,11 +141,11 @@ def main():
         ],
     )
     print("getRegular")
-    x = getRegular(p1)
+    x = get_regular(p1)
     print_image(x)
 
     print("myStack")
-    x = myStack(p0, p1, 2)
+    x = my_stack(p0, p1, 2)
     print_image(x)
 
     print("wrap")
@@ -172,11 +173,11 @@ def main():
     print_image(x)
 
     print("outerProductIS")
-    x = outerProductIS(p1, p3)
+    x = outer_product_is(p1, p3)
     print_image(x)
 
     print("replaceCols")
-    x = replaceCols(p0, Image((0, 0), (5, 1), [0, 0, 0, 2, 1]))
+    x = replace_colors(p0, Image((0, 0), (5, 1), [0, 0, 0, 2, 1]))
     print_image(x)
 
     print("repeat")
@@ -185,6 +186,36 @@ def main():
 
     print("mirror")
     x = mirror(p0, empty((0, 0), (15, 15)), 1)
+    print_image(x)
+
+    print('smear')
+    p4 = Image(
+        (0, 0),
+        (4, 4),
+        [
+            0,
+            0,
+            0,
+            0,
+
+            0,
+            2,
+            3,
+            0,
+
+            0,
+            4,
+            5,
+            0,
+
+            0,
+            0,
+            0,
+            0,
+        ],
+    )
+    x = smear(p4, 7)
+    print_image(p4)
     print_image(x)
 
 
