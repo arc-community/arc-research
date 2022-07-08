@@ -275,6 +275,8 @@ def main():
     x = compress3(p5)
     print_image(x)
 
+    print(x.np)
+
 
 if __name__ == "__main__":
     main()

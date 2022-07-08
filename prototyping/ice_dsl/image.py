@@ -1,5 +1,7 @@
 from __future__ import annotations
 from typing import Callable, Iterable, Tuple, overload, List
+import numpy as np
+
 
 MAXSIDE = 100
 MAXAREA = 40 * 40
@@ -183,6 +185,10 @@ class Image:
 
     def copy(self) -> Image:
         return Image(self.p, self.sz, self.mask.copy())
+
+    @property
+    def np(self) -> np.ndarray:
+        return np.array(self.mask, dtype=np.int64).reshape(self.h, self.w)
 
 
 badImg = Image((0, 0), (0, 0), [])
