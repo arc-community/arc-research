@@ -3,6 +3,7 @@ from itertools import tee
 
 import networkx as nx
 import numpy as np
+from sknetwork.topology import get_connected_components
 from scipy.sparse import csr_matrix
 from sknetwork.topology import WeisfeilerLehman
 from sknetwork.visualization import svg_graph
@@ -16,6 +17,7 @@ def graphs_from_riddle(riddle: Riddle):
     for i, board in enumerate(riddle.train):
         graphs[i]['input'] = nx.from_numpy_matrix(binarize(board.input.np))
         graphs[i]['output'] = nx.from_numpy_matrix(binarize(board.output.np))
+    breakpoint()
     return graphs
 
 
@@ -55,7 +57,7 @@ def square_boards(riddle: Riddle):
 
 def run_stats(dataset):
     # load the riddles
-    riddles = map(load_riddle_from_file, get_riddles([dataset]).values())
+    riddles = get_riddles([dataset])
 
     # keep square matrices only
     riddles_with_sq_boards = tee(filter(square_boards, riddles), 2)
