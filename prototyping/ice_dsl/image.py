@@ -1,6 +1,8 @@
 from __future__ import annotations
 from typing import Callable, Iterable, Tuple, overload, List
 import numpy as np
+from arc.interface import Board
+from pyparsing import col
 
 
 MAXSIDE = 100
@@ -85,6 +87,10 @@ class Point:
 
 
 class Image:
+    @staticmethod
+    def from_board(board: Board) -> Image:
+        return Image(Point(), Point(board.num_rows, board.num_cols), board.flat)
+
     @overload
     def __init__(self, p: Point, sz: Point, mask: Iterable[int]):
         ...
@@ -189,6 +195,13 @@ class Image:
     @property
     def np(self) -> np.ndarray:
         return np.array(self.mask, dtype=np.int64).reshape(self.h, self.w)
+
+    def to_board(self) -> Board:
+        data = [[self[(i, j)] for j in range(self.w)] for i in range(self.h)]
+        return Board.parse_obj(data)
+
+    def fmt(self, colored=False) -> str:
+        return self.to_board().fmt(colored=colored)
 
 
 badImg = Image((0, 0), (0, 0), [])

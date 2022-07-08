@@ -40,17 +40,8 @@ from image import (
 import typer
 
 
-def board_to_image(board: Board) -> Image:
-    return Image(Point(), Point(board.num_rows, board.num_cols), board.flat)
-
-
-def image_to_board(img: Image) -> Board:
-    data = [[img[(i, j)] for j in range(img.w)] for i in range(img.h)]
-    return Board.parse_obj(data)
-
-
-def print_image(img):
-    typer.echo(image_to_board(img).fmt(True))
+def print_image(img: Image):
+    typer.echo(img.fmt(True))
 
 
 def main():
@@ -61,31 +52,29 @@ def main():
         riddle = dataset.load_riddle_from_id(id)
 
         b = riddle.train[0].output
-        img = board_to_image(b)
+        img = Image.from_board(b)
         img = sub_image(img, Point(2, 2), Point(4, 4))
         print("maj col:", majority_color(img))
 
         print("img", img)
 
-        b2 = image_to_board(img)
+        b2 = img.to_board()
 
         print("broadcast")
         y = broadcast(img, full((0, 0), (11, 11)))
-        typer.echo(image_to_board(y).fmt(colored=True))
-        typer.echo(image_to_board(img).fmt(colored=True))
+        print_image(y)
+        print_image(img)
 
         a = split_colors(img)
         for x in a:
-            typer.echo(image_to_board(x).fmt(True))
+            print_image(x)
             print()
-            typer.echo(image_to_board(invert(x)).fmt(True))
+            print_image(invert(x))
             print()
-            typer.echo(image_to_board(filter_color(x, 2)).fmt(True))
+            print_image(filter_color(x, 2))
 
         print(a)
-        typer.echo(b2.fmt(colored=True))
-
-        # typer.echo(riddle.fmt(colored=True, with_test_outputs=False))
+        print_image(b2)
 
     print("compress")
     x = full((1, 1), (10, 10))
