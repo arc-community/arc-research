@@ -25,11 +25,12 @@ from image import (
     majority_color_image,
     make_border,
     makeBorder2,
+    move,
     smear,
     sub_image,
     split_colors,
     invert,
-    filterCol,
+    filter_color,
     broadcast,
     full,
     compress,
@@ -51,6 +52,7 @@ from image import (
     split_all,
     compose,
     compose_list,
+    Pos
 )
 
 import typer
@@ -227,6 +229,11 @@ def register_functions(f: NodeFactory):
     for i in range(4):
         f.register_unary(f"half{i}", partial(half, id=i))
 
+    for dy in range(-2,3,1):
+        for dx in range(-2,3,1):
+            f.register_unary(f"move_{dx}_{dy}", partial(move, p=Pos(dx,dy)))
+
+
     f.register("invert", invert, ParameterType.Image, [ParameterType.Image])
     f.register(
         "mirror", mirror, ParameterType.Image, [ParameterType.Image, ParameterType.Image]
@@ -308,7 +315,7 @@ def main():
 
     f = NodeFactory()
     register_functions(f)
-    g = generate_random_graph(f, 4)
+    g = generate_random_graph(f, 5)
     print(g.fmt())
 
     eval_riddle_ids = dataset.get_riddle_ids(["evaluation"])
