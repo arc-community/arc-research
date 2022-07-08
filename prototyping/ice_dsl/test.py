@@ -6,6 +6,7 @@ from image import (
     Image,
     empty,
     majority_color,
+    makeBorder2,
     sub_image,
     split_colors,
     invert,
@@ -30,7 +31,8 @@ from image import (
     split_all,
     compose,
     compose_list,
-    smear
+    smear,
+    make_border
 )
 
 import typer
@@ -214,10 +216,16 @@ def main():
             0,
         ],
     )
-    x = smear(p4, 7)
-    print_image(p4)
+    x = smear(p4, 7) 
     print_image(x)
 
+    print('make_border')
+    x = make_border(p4, 1)
+    print_image(x)
+
+    print('makeBorder2')
+    x = makeBorder2(p4)
+    print_image(x)
 
 if __name__ == "__main__":
     main()

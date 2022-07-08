@@ -21,6 +21,8 @@ from image import (
     hull0,
     majority_color,
     majority_color_image,
+    make_border,
+    makeBorder2,
     smear,
     sub_image,
     split_colors,
@@ -211,10 +213,14 @@ def register_functions(f: NodeFactory):
     for i in range(15):
         f.register_unary(f"smear_{i}", partial(smear, id=i))
 
+    f.register_unary("make_border", partial(make_border, bcol=1))
+
+    for b in (False, True):
+        f.register_unary("make_border2", partial(makeBorder2, usemaj=b))
+
     for i in range(4):
         f.register_unary(f"half{i}", partial(half, id=i))
 
-    
     f.register("invert", invert, ParameterType.Image, [ParameterType.Image])
     f.register(
         "mirror", mirror, ParameterType.Image, [ParameterType.Image, ParameterType.Image]

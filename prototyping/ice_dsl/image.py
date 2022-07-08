@@ -1043,7 +1043,7 @@ def smear(img: Image, id: int) -> Image:
 
                 if i - dy < 0 or j - dx < 0 or i - dy >= img.h or j - dx >= img.w:
                     steps = MAXSIDE
-                    
+
                     if dx == -1:
                         steps = min(steps, j + 1)
                     if dx == 1:
@@ -1063,6 +1063,7 @@ def smear(img: Image, id: int) -> Image:
                             ret.mask[ind] = c
 
     return ret
+
 
 """
 def smear(base: Image, room: Image, id: int) -> Image:
@@ -1120,6 +1121,7 @@ def smear(base: Image, room: Image, id: int) -> Image:
 
     return ret
 """
+
 
 def clamp(x, lo, hi):
     if x < lo:
@@ -1491,4 +1493,38 @@ def mirror2(a: Image, line: Image) -> Image:
         ret.y = a.y
         ret.x = line.x * 2 + line.w - a.x - a.w
 
+    return ret
+
+
+def make_border(img: Image, bcol: int = 1) -> Image:
+    ret = hull0(img)
+    for i in range(ret.h):
+        for j in range(ret.w):
+            if img[i, j] == 0:
+                ok = False
+                for ni in (i - 1, i, i + 1):
+                    for nj in (j - 1, j, j + 1):
+
+                        if img.safe(ni, nj) != 0:
+                            ok = True
+                            break
+                if ok:
+                    ret[i, j] = bcol
+
+    return ret
+
+
+def makeBorder2(img: Image, usemaj: bool = True) -> Image:
+    bcol = 1
+    if usemaj:
+        bcol = majority_color(img)
+
+    rsz = img.sz + Point(2, 2)
+    if max(rsz.x, rsz.y) > MAXSIDE or rsz.x * rsz.y > MAXAREA:
+        return badImg
+
+    ret = full(img.p - Point(1, 1), rsz, bcol)
+    for i in range(img.h):
+        for j in range(img.w):
+            ret[i + 1, j + 1] = img[i, j]
     return ret
