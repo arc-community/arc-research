@@ -32,7 +32,7 @@ from image import (
     compose,
     compose_list,
     smear,
-    make_border
+    make_border,
 )
 
 import typer
@@ -190,7 +190,7 @@ def main():
     x = mirror(p0, empty((0, 0), (15, 15)), 1)
     print_image(x)
 
-    print('smear')
+    print("smear")
     p4 = Image(
         (0, 0),
         (4, 4),
@@ -199,33 +199,48 @@ def main():
             0,
             0,
             0,
-
             0,
             2,
             3,
             0,
-
             0,
             4,
             5,
             0,
-
             0,
             0,
             0,
             0,
         ],
     )
-    x = smear(p4, 7) 
+    x = smear(p4, 7)
     print_image(x)
 
-    print('make_border')
+    print("make_border")
     x = make_border(p4, 1)
     print_image(x)
 
-    print('makeBorder2')
+    print("makeBorder2")
     x = makeBorder2(p4)
     print_image(x)
+
+    print("split_colors")  
+    xs = split_colors(p4)
+    print('original:')
+    print_image(p4)
+    print('split:')
+    for x in xs:
+        print_image(x)
+    
+    print('split_all')
+    xs = split_all(p0)
+    print('original:')
+    print_image(p0)
+    print('split:')
+    for x in xs:
+        print_image(x)
+        print(x.sz)
+
 
 if __name__ == "__main__":
     main()

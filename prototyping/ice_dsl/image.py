@@ -150,11 +150,7 @@ class Image:
         self.mask[i * self.w + j] = value
 
     def safe(self, i: int, j: int) -> int:
-        return (
-            0
-            if i < 0 or j < 0 or i >= self.h or j >= self.w
-            else self.mask[i * self.w + j]
-        )
+        return 0 if i < 0 or j < 0 or i >= self.h or j >= self.w else self.mask[i * self.w + j]
 
     def __eq__(self, other: object) -> bool:
         return self.p == other.p and self.sz == other.sz and self.mask == other.mask
@@ -297,14 +293,7 @@ def count_components(img: Image) -> int:
 
 
 def sub_image(img: Image, p: Point, sz: Point) -> Image:
-    assert (
-        p.x >= 0
-        and p.y >= 0
-        and p.x + sz.x <= img.w
-        and p.y + sz.y <= img.h
-        and sz.x >= 0
-        and sz.y >= 0
-    )
+    assert p.x >= 0 and p.y >= 0 and p.x + sz.x <= img.w and p.y + sz.y <= img.h and sz.x >= 0 and sz.y >= 0
     return Image(
         img.p + p,
         sz,
@@ -338,7 +327,7 @@ def split_colors(img: Image, include0: bool = False) -> List[Image]:
     ret = []
     mask = color_mask(img)
     for c in range(int(include0), 10):
-        if mask >> c & 1:
+        if (mask >> c) & 1:
             ret.append(Image(img.p, img.sz, [int(x == c) for x in img.mask]))
     return ret
 
@@ -547,9 +536,7 @@ def compress(img: Image, bg: Image = Col(0)):
     return ret
 
 
-def compose_internal(
-    a: Image, b: Image, f: Callable[[int, int], int], overlap_only: int
-) -> Image:
+def compose_internal(a: Image, b: Image, f: Callable[[int, int], int], overlap_only: int) -> Image:
     ret = Image((0, 0), (0, 0), [])
     if overlap_only == 1:
         ret.p = Point(max(a.x, b.x), max(a.y, b.y))
@@ -589,29 +576,17 @@ def compose_internal(
 
 def compose(a: Image, b: Image, id: int = 0) -> Image:
     if id == 0:
-        return compose_internal(
-            a, b, lambda a, b: b if b != 0 else a, 0
-        )  # a then b, inside either
+        return compose_internal(a, b, lambda a, b: b if b != 0 else a, 0)  # a then b, inside either
     elif id == 1:
-        return compose_internal(
-            a, b, lambda a, b: b if b != 0 else a, 1
-        )  # a then b, inside both
+        return compose_internal(a, b, lambda a, b: b if b != 0 else a, 1)  # a then b, inside both
     elif id == 2:
-        return compose_internal(
-            a, b, lambda a, b: a if b != 0 else 0, 1
-        )  # a masked by b
+        return compose_internal(a, b, lambda a, b: a if b != 0 else 0, 1)  # a masked by b
     elif id == 3:
-        return compose_internal(
-            a, b, lambda a, b: b if b != 0 else a, 2
-        )  # a then b, inside of a
+        return compose_internal(a, b, lambda a, b: b if b != 0 else a, 2)  # a then b, inside of a
     elif id == 4:
-        return compose_internal(
-            a, b, lambda a, b: 0 if b != 0 else a, 2
-        )  # a masked by inverse of b, inside of a
+        return compose_internal(a, b, lambda a, b: 0 if b != 0 else a, 2)  # a masked by inverse of b, inside of a
     elif id == 5:
-        return compose_internal(
-            a, b, lambda a, b: max(a, b), 0
-        )  # max(a, b), inside either
+        return compose_internal(a, b, lambda a, b: max(a, b), 0)  # max(a, b), inside either
     else:
         assert id >= 0 and id < 5
     return badImg
@@ -642,14 +617,7 @@ def fill(a: Image) -> Image:
         for d in range(4):
             nr = r + int(d == 2) - int(d == 3)
             nc = c + int(d == 0) - int(d == 1)
-            if (
-                nr >= 0
-                and nr < a.h
-                and nc >= 0
-                and nc < a.w
-                and a[nr, nc] == 0
-                and ret[nr, nc] != 0
-            ):
+            if nr >= 0 and nr < a.h and nc >= 0 and nc < a.w and a[nr, nc] == 0 and ret[nr, nc] != 0:
                 q.append((nr, nc))
                 ret[nr, nc] = 0
 
@@ -1204,14 +1172,7 @@ def cut(img: Image, a: Image) -> List[Image]:
                 toadd = empty(img.p, img.sz)
 
                 def dfs(r: int, c: int) -> None:
-                    if (
-                        r < 0
-                        or r >= img.h
-                        or c < 0
-                        or c >= img.w
-                        or a.safe(r + d.y, c + d.x) != 0
-                        or done[r, c] != 0
-                    ):
+                    if r < 0 or r >= img.h or c < 0 or c >= img.w or a.safe(r + d.y, c + d.x) != 0 or done[r, c] != 0:
                         return
                     toadd[r, c] = img[r, c] + 1
                     done[r, c] = 1
@@ -1269,14 +1230,7 @@ def replace_colors(base: Image, cols: Image) -> Image:
                 path = []
 
                 def dfs(r: int, c: int):
-                    if (
-                        r < 0
-                        or r >= base.h
-                        or c < 0
-                        or c >= base.w
-                        or base[r, c] != acol
-                        or done[r, c] != 0
-                    ):
+                    if r < 0 or r >= base.h or c < 0 or c >= base.w or base[r, c] != acol or done[r, c] != 0:
                         return
                     cnt[cols.safe(r + d.y, c + d.x)] += 1
                     path.append((r, c))
@@ -1409,14 +1363,7 @@ def split_all(img: Image) -> List[Image]:
                 toadd = empty(img.p, img.sz)
 
                 def dfs(r: int, c: int, col: int) -> None:
-                    if (
-                        r < 0
-                        or r > img.h
-                        or c < 0
-                        or c >= img.w
-                        or img[r, c] != col
-                        or done[r, c] != 0
-                    ):
+                    if r < 0 or r >= img.h or c < 0 or c >= img.w or img[r, c] != col or done[r, c] != 0:
                         return
                     toadd[r, c] = img[r, c] + 1
                     done[r, c] = 1
@@ -1428,10 +1375,10 @@ def split_all(img: Image) -> List[Image]:
 
                 for y in range(toadd.h):
                     for x in range(toadd.w):
-                        toadd[i, j] = max(0, toadd[i, j] - 1)
+                        toadd[y, x] = max(0, toadd[y, x] - 1)
 
-            if count_nonzero(toadd) > 0:
-                ret.append(toadd)
+                if count_nonzero(toadd) > 0:
+                    ret.append(toadd)
 
     return ret
 
@@ -1448,11 +1395,7 @@ def split_columns(img: Image) -> List[Image]:
     ret = []
     if img.area > 0:
         for j in range(img.w):
-            ret.append(
-                Image(
-                    Point(j, 0), Point(1, img.h), [img.mask[i, j] for i in range(img.h)]
-                )
-            )
+            ret.append(Image(Point(j, 0), Point(1, img.h), [img.mask[i, j] for i in range(img.h)]))
 
     return ret
 
@@ -1461,11 +1404,7 @@ def split_rows(img: Image) -> List[Image]:
     ret = []
     if img.area > 0:
         for i in range(img.h):
-            ret.append(
-                Image(
-                    Point(0, i), Point(img.w, 1), [img.mask[i, j] for j in range(img.w)]
-                )
-            )
+            ret.append(Image(Point(0, i), Point(img.w, 1), [img.mask[i, j] for j in range(img.w)]))
     return ret
 
 
