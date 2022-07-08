@@ -60,10 +60,14 @@ class Node:
         self.name = name
         self.id = id
 
-    def evaluate(self, input):
+    def evaluate(self, input: Image):
         pass
 
-    def fmt(self):
+    def fmt(self) -> str:
+        pass
+
+    @property
+    def depth(self) -> int:
         pass
 
 
@@ -71,11 +75,15 @@ class InputNode(Node):
     def __init__(self, id=0):
         super().__init__(ParameterType.Image, "input", id)
 
-    def evaluate(self, input):
+    def evaluate(self, input: Image):
         return input
 
     def fmt(self):
         return self.name
+
+    @property
+    def depth(self) -> int:
+        return 0
 
 
 class FunctionNode(Node):
@@ -84,7 +92,7 @@ class FunctionNode(Node):
         self.fn = fn
         self.input_nodes = [None] * len(fn.parameterTypes)
 
-    def evaluate(self, input):
+    def evaluate(self, input: Image):
         inputs = [n.evaluate(input) for n in self.input_nodes]
         return self.fn.evaluate(inputs)
 
@@ -94,6 +102,10 @@ class FunctionNode(Node):
         if source_node.return_type != self.fn.parameterTypes[index]:
             raise ValueError("Source node type does not match input parameter type")
         self.input_nodes[index] = source_node
+
+    @property
+    def depth(self) -> int:
+        return max(n.depth for n in self.input_nodes) + 1
 
     def fmt(self):
         args = (f"x{a.id}" for a in self.input_nodes)
@@ -226,6 +238,7 @@ def image_to_board(img: Image) -> Board:
 
 def print_image(img):
     typer.echo(image_to_board(img).fmt(True))
+    print(f'p: {img.p.x},{img.p.y}; sz: {img.sz.x}x{img.sz.y};')
 
 
 def main():
@@ -250,7 +263,14 @@ def main():
         outputs = g.evaluate(img)
         for i, o in enumerate(outputs):
             print(f"x{i}:")
+            print('depth: ', g.nodes[i].depth)
             print_image(o)
+
+
+        # configure DSL operations to include in graph
+        # cache node outputs
+        # output must be at least 1x1 and not larger than max-side-length
+        # each operation in graph should make a difference
 
 
 if __name__ == "__main__":
