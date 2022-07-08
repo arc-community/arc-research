@@ -4,6 +4,8 @@ from arc.utils import dataset
 from image import (
     Point,
     Image,
+    compress2,
+    compress3,
     empty,
     majority_color,
     makeBorder2,
@@ -224,22 +226,54 @@ def main():
     x = makeBorder2(p4)
     print_image(x)
 
-    print("split_colors")  
+    print("split_colors")
     xs = split_colors(p4)
-    print('original:')
+    print("original:")
     print_image(p4)
-    print('split:')
+    print("split:")
     for x in xs:
         print_image(x)
-    
-    print('split_all')
+
+    print("split_all")
     xs = split_all(p0)
-    print('original:')
+    print("original:")
     print_image(p0)
-    print('split:')
+    print("split:")
     for x in xs:
         print_image(x)
         print(x.sz)
+
+    print("compress2")
+    print_image(p4)
+    x = compress(p4)
+    print_image(x)
+
+    p5 = Image(
+        (0, 0),
+        (4, 4),
+        [
+            1,
+            1,
+            1,
+            0,
+            1,
+            1,
+            1,
+            0,
+            0,
+            3,
+            3,
+            3,
+            0,
+            3,
+            3,
+            3,
+        ],
+    )
+
+    print("compress3")
+    x = compress3(p5)
+    print_image(x)
 
 
 if __name__ == "__main__":

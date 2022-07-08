@@ -9,6 +9,8 @@ from image import (
     Image,
     center,
     color_shape_const,
+    compress2,
+    compress3,
     count,
     empty,
     erase_color,
@@ -217,6 +219,10 @@ def register_functions(f: NodeFactory):
 
     for b in (False, True):
         f.register_unary("make_border2", partial(makeBorder2, usemaj=b))
+
+
+    f.register_unary("compress2", compress2)
+    f.register_unary("compress3", compress3)
 
     for i in range(4):
         f.register_unary(f"half{i}", partial(half, id=i))

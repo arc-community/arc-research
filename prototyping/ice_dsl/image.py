@@ -1467,3 +1467,46 @@ def makeBorder2(img: Image, usemaj: bool = True) -> Image:
         for j in range(img.w):
             ret[i + 1, j + 1] = img[i, j]
     return ret
+
+
+def compress2(img: Image) -> Image:
+    """Delete black rows / cols"""
+    row = [0] * img.h
+    col = [0] * img.w
+    for i in range(img.h):
+        for j in range(img.w):
+            if img[i, j] != 0:
+                row[i] = col[j] = 1
+    rows = [i for i in range(img.h) if row[i] != 0]
+    cols = [j for j in range(img.w) if col[j] != 0]
+
+    ret = empty(Point(len(cols), len(rows)))
+    for i in range(ret.h):
+        for j in range(ret.w):
+            ret[i, j] = img[rows[i], cols[j]]
+    return ret
+
+
+def compress3(img: Image) -> Image:
+    """Group single color rectangles"""
+    if img.area <= 0:
+        return badImg
+    row = [0] * img.h
+    col = [0] * img.w
+
+    row[0] = col[0] = 1
+
+    for i in range(img.h):
+        for j in range(img.w):
+            if i > 0 and img[i, j] != img[i - 1, j]:
+                row[i] = 1
+            if j > 0 and img[i, j] != img[i, j - 1]:
+                col[j] = 1
+
+    rows = [i for i in range(img.h) if row[i] != 0]
+    cols = [j for j in range(img.w) if col[j] != 0]
+    ret = empty(Point(len(cols), len(rows)))
+    for i in range(ret.h):
+        for j in range(ret.w):
+            ret[i, j] = img[rows[i], cols[j]]
+    return ret
