@@ -9,6 +9,7 @@ from image import (
     Image,
     center,
     color_shape_const,
+    compose_growing,
     compress2,
     compress3,
     connect,
@@ -22,6 +23,7 @@ from image import (
     get_pos,
     get_size,
     get_size0,
+    gravity,
     half,
     hull,
     hull0,
@@ -31,10 +33,16 @@ from image import (
     make_border,
     makeBorder2,
     move,
+    my_stack_list,
+    pick_max,
+    pick_maxes,
+    pick_not_maxes,
+    pick_unique,
     smear,
     split_columns,
     split_rows,
     spread_colors,
+    stack_line,
     sub_image,
     split_colors,
     invert,
@@ -60,7 +68,7 @@ from image import (
     split_all,
     compose,
     compose_list,
-    Pos
+    Pos,
 )
 
 import typer
@@ -155,7 +163,9 @@ class NodeFactory:
         self.register(name, fn, returnType=ParameterType.Image, parameterTypes=[ParameterType.Image])
 
     def register_binary(self, name: str, fn) -> None:
-        self.register(name, fn, returnType=ParameterType.Image, parameterTypes=[ParameterType.Image, ParameterType.Image])
+        self.register(
+            name, fn, returnType=ParameterType.Image, parameterTypes=[ParameterType.Image, ParameterType.Image]
+        )
 
     def create_node(self, function_name) -> FunctionNode:
         fn = self.functions[function_name]
@@ -218,7 +228,7 @@ def register_functions(f: NodeFactory):
     f.register_unary("center", center)
     f.register_unary("majority_color_image", majority_color_image)
 
-    for i in range(1,9):
+    for i in range(1, 9):
         f.register_unary(f"rigid{i}", partial(rigid, id=i))
 
     for a in range(3):
@@ -245,9 +255,10 @@ def register_functions(f: NodeFactory):
     for i in range(4):
         f.register_unary(f"half{i}", partial(half, id=i))
 
-    for dy in range(-2,3,1):
-        for dx in range(-2,3,1):
-            f.register_unary(f"move_{dx}_{dy}", partial(move, p=Pos(dx,dy)))
+    for dy in range(-2, 3, 1):
+        for dx in range(-2, 3, 1):
+            if dy != 0 or dx != 0:
+                f.register_unary(f"move_{dx}_{dy}", partial(move, p=Pos(dx, dy)))
 
     # binary
     f.register_binary("embed", embed)
@@ -260,50 +271,81 @@ def register_functions(f: NodeFactory):
 
     # split
     f.register("cut_image", cut_image, returnType=ParameterType.ImageList, parameterTypes=[ParameterType.Image])
-    f.register("split_colors", partial(split_colors, include0=False), returnType=ParameterType.ImageList, parameterTypes=[ParameterType.Image])
+    f.register(
+        "split_colors",
+        partial(split_colors, include0=False),
+        returnType=ParameterType.ImageList,
+        parameterTypes=[ParameterType.Image],
+    )
     f.register("split_all", split_all, returnType=ParameterType.ImageList, parameterTypes=[ParameterType.Image])
     f.register("split_columns", split_columns, returnType=ParameterType.ImageList, parameterTypes=[ParameterType.Image])
     f.register("split_rows", split_rows, returnType=ParameterType.ImageList, parameterTypes=[ParameterType.Image])
-    f.register("insideMarked", inside_marked, returnType=ParameterType.ImageList, parameterTypes=[ParameterType.Image])
-
-    f.register("invert", invert, ParameterType.Image, [ParameterType.Image])
-    f.register(
-        "mirror", mirror, ParameterType.Image, [ParameterType.Image, ParameterType.Image]
-    )
-    f.register(
-        "mirror_pad",
-        lambda a, b: mirror(a, b, pad=1),
-        ParameterType.Image,
-        [ParameterType.Image, ParameterType.Image],
-    )
-    f.register(
-        "replace_colors",
-        replace_colors,
-        ParameterType.Image,
-        [ParameterType.Image, ParameterType.Image],
-    )
-    f.register("wrap", wrap, ParameterType.Image, [ParameterType.Image, ParameterType.Image])
-
-    for i in range(4):
+    f.register("inside_marked", inside_marked, returnType=ParameterType.ImageList, parameterTypes=[ParameterType.Image])
+    for d in range(4):
         f.register(
-            f"my_stack{i}",
-            partial(my_stack, orient=i),
-            ParameterType.Image,
-            [ParameterType.Image, ParameterType.Image],
+            f"gravity_{d}",
+            partial(gravity, d=d),
+            returnType=ParameterType.ImageList,
+            parameterTypes=[ParameterType.Image],
         )
-    f.register("border", border, ParameterType.Image, [ParameterType.Image])
-    f.register("split_all", split_all, ParameterType.ImageList, [ParameterType.Image])
 
-    for i in range(6):
+    # join
+    for id in range(14):
         f.register(
-            f"compose{i}",
-            partial(compose, id=i),
-            ParameterType.Image,
-            [ParameterType.Image, ParameterType.Image],
+            f"pick_max_{id}",
+            partial(pick_max, id=id),
+            returnType=ParameterType.Image,
+            parameterTypes=[ParameterType.ImageList],
         )
-        f.register(f"compose_list{i}", partial(compose_list, id=i), ParameterType.Image, [ParameterType.ImageList])
-    f.register("fill", fill, ParameterType.Image, [ParameterType.Image])
-    f.register("filter_color_palette", filter_color_palette, ParameterType.Image, [ParameterType.Image, ParameterType.Image])
+    f.register(f"pick_unique", pick_unique, returnType=ParameterType.Image, parameterTypes=[ParameterType.ImageList])
+    f.register(
+        "compose_growing", compose_growing, returnType=ParameterType.Image, parameterTypes=[ParameterType.ImageList]
+    )
+    f.register("stack_line", stack_line, returnType=ParameterType.Image, parameterTypes=[ParameterType.ImageList])
+    for id in range(4):
+        f.register(
+            f"my_stack_list_{id}",
+            partial(my_stack_list, orient=id),
+            returnType=ParameterType.Image,
+            parameterTypes=[ParameterType.ImageList],
+        )
+
+    # vector
+    for id in range(14):
+        f.register(
+            f"pick_maxes_{id}",
+            partial(pick_maxes, id=id),
+            returnType=ParameterType.ImageList,
+            parameterTypes=[ParameterType.ImageList],
+        )
+        f.register(
+            f"pick_not_maxes_{id}",
+            partial(pick_not_maxes, id=id),
+            returnType=ParameterType.ImageList,
+            parameterTypes=[ParameterType.ImageList],
+        )
+    
+    # f.register("invert", invert, ParameterType.Image, [ParameterType.Image])
+
+    # f.register(
+    #     "replace_colors",
+    #     replace_colors,
+    #     ParameterType.Image,
+    #     [ParameterType.Image, ParameterType.Image],
+    # )
+
+    # for i in range(6):
+    #     f.register(
+    #         f"compose{i}",
+    #         partial(compose, id=i),
+    #         ParameterType.Image,
+    #         [ParameterType.Image, ParameterType.Image],
+    #     )
+    #     f.register(f"compose_list{i}", partial(compose_list, id=i), ParameterType.Image, [ParameterType.ImageList])
+    # f.register("fill", fill, ParameterType.Image, [ParameterType.Image])
+    # f.register(
+    #     "filter_color_palette", filter_color_palette, ParameterType.Image, [ParameterType.Image, ParameterType.Image]
+    # )
     return f
 
 
@@ -339,7 +381,7 @@ def image_to_board(img: Image) -> Board:
 
 def print_image(img):
     typer.echo(image_to_board(img).fmt(True))
-    print(f'p: {img.p.x},{img.p.y}; sz: {img.sz.x}x{img.sz.y};')
+    print(f"p: {img.p.x},{img.p.y}; sz: {img.sz.x}x{img.sz.y};")
 
 
 def main():
@@ -347,6 +389,7 @@ def main():
 
     f = NodeFactory()
     register_functions(f)
+    print("Number of functions:", len(f.functions))
     g = generate_random_graph(f, 5)
     print(g.fmt())
 
@@ -364,9 +407,8 @@ def main():
         outputs = g.evaluate(img)
         for i, o in enumerate(outputs):
             print(f"x{i}:")
-            print('depth: ', g.nodes[i].depth)
+            print("depth: ", g.nodes[i].depth)
             print_image(o)
-
 
         # configure DSL operations to include in graph
         # cache node outputs

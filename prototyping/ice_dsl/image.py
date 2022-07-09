@@ -1014,11 +1014,11 @@ def my_stack(a: Image, b: Image, orient: int) -> Image:
 
 
 def my_stack_list(lens: List[Image], orient: int) -> Image:
+    """stack images sorted based on area"""
     n = len(lens)
     if n == 0:
         return badImg
-    order = [(lens[i].w * lens[i].h, i) for i in range(n)]
-    order.sort()
+    order = sorted([(lens[i].area, i) for i in range(n)])
     ret = lens[order[0][1]].copy()
     for i in range(1, n):
         ret = my_stack(ret, lens[order[i][1]], orient)
@@ -1509,6 +1509,28 @@ def cut_index(a: Image, b: Image, ind: int) -> Image:
     return v[ind]
 
 
+def pick_maxes_internal(v: List[Image], f, invert: bool = False) -> List[Image]:
+    n = len(v)
+    if n == 0:
+        return []
+    score = [f(img) for img in v]
+    ma = max(score)
+
+    ret_imgs = []
+    for i in range(n):
+        if (score[i] == ma) ^ invert:
+            ret_imgs.append(v[i])
+    return ret_imgs
+
+
+def pick_maxes(v: List[Image], id: int) -> List[Image]:
+    return pick_maxes_internal(v, lambda img: max_criterion(img, id), False)
+
+
+def pick_not_maxes(v: List[Image], id: int) -> List[Image]:
+    return pick_maxes_internal(v, lambda img: max_criterion(img, id), True)
+
+
 def split_all(img: Image) -> List[Image]:
     ret = []
     done = empty(img.p, img.sz)
@@ -1789,7 +1811,7 @@ def compose_growing(imgs: List[Image]) -> Image:
         return badImg
 
     order = sorted([(count_nonzero(imgs[i]), i) for i in range(n)])
-    ret = imgs[order[0][1]]
+    ret = imgs[order[0][1]].copy()
     for i in range(1, n):
         ret = compose(ret, imgs[order[i][1]], 0)
     return ret

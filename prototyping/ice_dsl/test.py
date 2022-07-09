@@ -16,6 +16,8 @@ from image import (
     majority_color,
     makeBorder2,
     my_stack_list,
+    pick_maxes,
+    pick_not_maxes,
     pick_unique,
     stack_line,
     sub_image,
@@ -377,6 +379,18 @@ def main():
     x = stack_line([p1, p3, p4, p5])
     print_image(x)
 
+    print("my_stack_list")
+    x = my_stack_list([p1, p3, p4, p5], 1)
+    print_image(x)
+
+    print("pick_maxes")
+    xs = pick_maxes([p1, p3, p4, p5], 4)
+    print_image(xs[0])
+
+    print("pick_not_maxes")
+    xs = pick_not_maxes([p1, p3, p4, p5], 4)
+    print(len(xs))
+    
 
 if __name__ == "__main__":
     main()
