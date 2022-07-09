@@ -6,7 +6,11 @@ from image import (
     Image,
     compress2,
     compress3,
+    connect,
+    cut,
+    cut_image,
     empty,
+    inside_marked,
     majority_color,
     makeBorder2,
     sub_image,
@@ -265,6 +269,53 @@ def main():
     print_image(x)
 
     print(x.np)
+
+    print("connect")
+
+    p6 = Image(
+        (0, 0),
+        (4, 4),
+        [
+            1,
+            0,
+            0,
+            1,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            1,
+            0,
+            0,
+            1,
+        ],
+    )
+    for i in range(3):
+        print(i)
+        x = connect(p6, i)
+        print_image(x)
+
+    print("cut_image")
+    print("in:")
+    print_image(p3)
+    xs = cut_image(p3)
+    print("out:")
+    for i,x in enumerate(xs):
+        print(f"{i}:")
+        print_image(x)
+
+    print("inside_marked")
+    print("in:")
+    print_image(p6)
+    xs = inside_marked(p6)
+    print("out:")
+    for i,x in enumerate(xs):
+        print(f"{i}: p: {x.p}")
+        print_image(x)
 
 
 if __name__ == "__main__":

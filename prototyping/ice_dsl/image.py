@@ -1333,6 +1333,93 @@ def majority_color_image(img: Image):
     return Col(majority_color(img))
 
 
+def heuristic_cut(img: Image) -> Image:
+    """
+    Return a single color
+    Cut into at least 2 pieces
+    No nested pieces
+    Must touch at least 2 opposite sides
+    Smallest piece should be as big as possible
+    """
+    ret = majority_color(img, 1)
+    ret_score = -1
+
+    mask = color_mask(img)
+
+    for col in range(10):
+        if (mask >> col) & 1 == 0:
+            continue
+
+        done = empty(img.p, img.sz)
+
+        def edgy(r: int, c: int) -> None:
+            if r < 0 or r >= img.h or c < 0 or c >= img.w or img[r, c] != col or done[r, c] != 0:
+                return
+            done[r, c] = 1
+            for nr in (r - 1, r, r + 1):
+                for nc in (c - 1, c, c + 1):
+                    edgy(nr, nc)
+
+        top, bot, left, right = False, False, False, False
+        for i in range(img.h):
+            for j in range(img.w):
+                if img[i, j] == col:
+                    if i == 0:
+                        top = True
+                    if j == 0:
+                        left = True
+                    if i == img.h - 1:
+                        bot = True
+                    if j == img.w - 1:
+                        right = True
+                if (i == 0 or j == 0 or i == img.h - 1 or j == img.w - 1) and img[i, j] == col and done[i, j] == 0:
+                    edgy(i, j)
+
+        if not (top and bot or left and right):
+            continue
+
+        score = 1e9
+        components = 0
+        nocontained = 1
+        for i in range(img.h):
+            for j in range(img.w):
+                cnt, contained = 0, 1
+                if done[i, j] == 0 and img[i, j] != col:
+
+                    def dfs(r: int, c: int):
+                        nonlocal contained
+                        nonlocal cnt
+                        if r < 0 or r >= img.h or c < 0 or c >= img.w:
+                            return
+                        if img[r, c] == col:
+                            if done[r, c] != 0:
+                                contained = 0
+                            return
+
+                        if done[r, c] != 0:
+                            return
+                        cnt += 1
+                        done[r, c] = 1
+                        for nr in (r - 1, r, r + 1):
+                            for nc in (c - 1, c, c + 1):
+                                dfs(nr, nc)
+
+                    dfs(i, j)
+                    components += 1
+                    score = min(score, cnt)
+                    if contained:
+                        nocontained = 0
+
+        if components >= 2 and nocontained and score > ret_score:
+            ret_score = score
+            ret = col
+    return filter_color(img, ret)
+
+
+def cut_image(img: Image) -> List[Image]:
+    return cut(img, heuristic_cut(img))
+
+
 def cut_pick_max(a: Image, b: Image, id: int) -> Image:
     return pick_max(cut(a, b), id)
 
@@ -1454,6 +1541,34 @@ def mirror2(a: Image, line: Image) -> Image:
     return ret
 
 
+def inside_marked(img: Image) -> List[Image]:
+    """Looks for 4 corners"""
+    ret = []
+    for i in range(img.h - 1):
+        for j in range(img.w - 1):
+            for h in range(1, img.h - 1 - i, 1):
+                for w in range(1, img.w - 1 - j, 1):
+                    col = img[i, j]
+                    if col == 0:
+                        continue
+
+                    def check():
+                        test = True
+                        for k in range(4):
+                            x = j + (k % 2) * w
+                            y = i + (k // 2) * h
+                            for d in range(4):
+                                if not (d == k) == (img[y + d // 2, x + d % 2] == col):
+                                   return False
+                        return True
+
+                    if check():
+                        inside = invert(full(Point(j + 1, i + 1), Point(w, h)))
+                        ret.append(compose(inside, img, 3))
+
+    return ret
+
+
 def make_border(img: Image, bcol: int = 1) -> Image:
     ret = hull0(img)
     for i in range(ret.h):
@@ -1529,3 +1644,64 @@ def compress3(img: Image) -> Image:
         for j in range(ret.w):
             ret[i, j] = img[rows[i], cols[j]]
     return ret
+
+
+def connect(img: Image, id: int) -> Image:
+    """Zero pixels between two pixels of same color are filled. In the returned image only the infill pixels are set."""
+    assert id >= 0 and id < 3
+    ret = empty(img.p, img.sz)
+
+    # horizontal
+    if id == 0 or id == 2:
+        for i in range(img.h):
+            last, lastc = -1, -1
+            for j in range(img.w):
+                if img[i, j] != 0:
+                    if img[i, j] == lastc:
+                        for k in range(last + 1, j, 1):
+                            ret[i, k] = lastc
+
+                    lastc = img[i, j]
+                    last = j
+
+    # vertical
+    if id == 1 or id == 2:
+        for j in range(img.w):
+            last, lastc = -1, -1
+            for i in range(img.h):
+                if img[i, j] != 0:
+                    if img[i, j] == lastc:
+                        for k in range(last + 1, i, 1):
+                            ret[k, j] = lastc
+                    lastc = img[i, j]
+                    last = i
+
+    return ret
+
+
+def spread_colors(img: Image, skipmaj: bool = False) -> Image:
+    skipcol = -1
+    if skipmaj:
+        skipcol = majority_color(img)
+
+    done = hull0(img)
+    q = []
+
+    for i in range(img.h):
+        for j in range(img.w):
+            if img[i, j] != 0:
+                if img[i, j] != skipcol:
+                    q.append((j, i, img[i, j]))
+                    done[i, j] = 1
+
+    while len(q) > 0:
+        j, i, c = q.pop(0)
+        for d in range(4):
+            ni = i + (d == 0) - (d == 1)
+            nj = j + (d == 2) - (d == 3)
+            if ni >= 0 and nj >= 0 and ni < img.h and nj < img.w and done[ni, nj] == 0:
+                img[ni, nj] = c
+                done[ni, nj] = 1
+                q.append((nj, ni, c))
+
+    return img
