@@ -1659,7 +1659,7 @@ def make_border(img: Image, bcol: int = 1) -> Image:
     return ret
 
 
-def makeBorder2(img: Image, usemaj: bool = True) -> Image:
+def make_border2(img: Image, usemaj: bool = True) -> Image:
     bcol = 1
     if usemaj:
         bcol = majority_color(img)

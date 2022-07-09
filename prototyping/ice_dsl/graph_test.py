@@ -1,7 +1,7 @@
-from typing import List
-from arc.interface import Riddle, Board
-from arc.utils import dataset
 from enum import Enum
+from typing import List
+from arc.interface import Board
+from arc.utils import dataset
 import random
 from functools import partial
 from image import (
@@ -16,7 +16,6 @@ from image import (
     count,
     cut_image,
     embed,
-    empty,
     erase_color,
     filter_color,
     filter_color_palette,
@@ -28,10 +27,9 @@ from image import (
     hull,
     hull0,
     inside_marked,
-    majority_color,
     majority_color_image,
     make_border,
-    makeBorder2,
+    make_border2,
     move,
     my_stack_list,
     pick_max,
@@ -43,12 +41,9 @@ from image import (
     split_rows,
     spread_colors,
     stack_line,
-    sub_image,
     split_colors,
-    invert,
     filter_color,
     broadcast,
-    full,
     compress,
     fill,
     border,
@@ -56,7 +51,6 @@ from image import (
     interior2,
     rigid,
     get_regular,
-    my_stack,
     to_origin,
     wrap,
     extend,
@@ -74,7 +68,7 @@ from image import (
 import typer
 
 
-class ParameterType:
+class ParameterType(Enum):
     Image = 1
     ImageList = 2
 
@@ -206,7 +200,7 @@ class NodeGraph:
 
 
 def register_functions(f: NodeFactory):
-
+    # unary
     for i in range(10):
         f.register_unary(f"filter_color{i}", partial(filter_color, id=i))
     for i in range(10):
@@ -241,7 +235,7 @@ def register_functions(f: NodeFactory):
     f.register_unary("make_border", partial(make_border, bcol=1))
 
     for b in (False, True):
-        f.register_unary("make_border2", partial(makeBorder2, usemaj=b))
+        f.register_unary("make_border2", partial(make_border2, usemaj=b))
 
     f.register_unary("compress2", compress2)
     f.register_unary("compress3", compress3)
@@ -250,7 +244,7 @@ def register_functions(f: NodeFactory):
         f.register_unary(f"connect_{id}", partial(connect, id=id))
 
     for skipmaj in (False, True):
-        f.register_unary(f"spreadCols_{1 if skipmaj else 0}", partial(spread_colors, skipmaj=skipmaj))
+        f.register_unary(f"spread_colors_{1 if skipmaj else 0}", partial(spread_colors, skipmaj=skipmaj))
 
     for i in range(4):
         f.register_unary(f"half{i}", partial(half, id=i))
@@ -325,8 +319,6 @@ def register_functions(f: NodeFactory):
             parameterTypes=[ParameterType.ImageList],
         )
     
-    # f.register("invert", invert, ParameterType.Image, [ParameterType.Image])
-
     # f.register(
     #     "replace_colors",
     #     replace_colors,
@@ -342,7 +334,6 @@ def register_functions(f: NodeFactory):
     #         [ParameterType.Image, ParameterType.Image],
     #     )
     #     f.register(f"compose_list{i}", partial(compose_list, id=i), ParameterType.Image, [ParameterType.ImageList])
-    # f.register("fill", fill, ParameterType.Image, [ParameterType.Image])
     # f.register(
     #     "filter_color_palette", filter_color_palette, ParameterType.Image, [ParameterType.Image, ParameterType.Image]
     # )
