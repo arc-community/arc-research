@@ -4,15 +4,20 @@ from arc.utils import dataset
 from image import (
     Point,
     Image,
+    compose_growing,
     compress2,
     compress3,
     connect,
     cut,
     cut_image,
     empty,
+    gravity,
     inside_marked,
     majority_color,
     makeBorder2,
+    my_stack_list,
+    pick_unique,
+    stack_line,
     sub_image,
     split_colors,
     invert,
@@ -304,7 +309,7 @@ def main():
     print_image(p3)
     xs = cut_image(p3)
     print("out:")
-    for i,x in enumerate(xs):
+    for i, x in enumerate(xs):
         print(f"{i}:")
         print_image(x)
 
@@ -313,9 +318,64 @@ def main():
     print_image(p6)
     xs = inside_marked(p6)
     print("out:")
-    for i,x in enumerate(xs):
+    for i, x in enumerate(xs):
         print(f"{i}: p: {x.p}")
         print_image(x)
+
+    print("gravity")
+    print("in:")
+    print_image(p6)
+    xs = gravity(p6, 2)
+    print("out:")
+    for i, x in enumerate(xs):
+        print(f"{i}: p: {x.p}")
+        print_image(x)
+    print("composed:")
+    print_image(compose_growing(xs))
+
+    print("pick_unique")
+    p7 = Image(
+        (0, 0),
+        (5, 5),
+        [
+            1,
+            2,
+            0,
+            3,
+            4,
+            2,
+            3,
+            0,
+            2,
+            1,
+            0,
+            0,
+            0,
+            0,
+            0,
+            8,
+            8,
+            0,
+            3,
+            4,
+            8,
+            8,
+            0,
+            2,
+            1,
+        ],
+    )
+
+    xs = cut_image(p7)
+    for x in xs:
+        print_image(x)
+    x = pick_unique(xs)
+    print_image(p7)
+    print_image(x)
+
+    print("stack_line")
+    x = stack_line([p1, p3, p4, p5])
+    print_image(x)
 
 
 if __name__ == "__main__":

@@ -1,5 +1,6 @@
 from __future__ import annotations
 from typing import Callable, Iterable, Tuple, overload, List
+from functools import cmp_to_key
 import numpy as np
 from arc.interface import Board
 from pyparsing import col
@@ -955,6 +956,43 @@ def count(img: Image, id: int, out_type: int) -> Image:
     return full(sz, majority_color(img))
 
 
+def gravity(img: Image, d: int) -> List[Image]:
+    pieces = split_all(img)
+    out = hull0(img)
+
+    # 0: (1,0), 1: (-1,0), 2: (0,1), 3: (0,-1)  (right, left, down, up)
+    dx = int(d == 0) - int(d == 1)
+    dy = int(d == 2) - int(d == 3)
+
+    ret = []
+    pieces.sort(key=cmp_to_key(lambda a, b: (a.x - b.x) * dx + (a.y - b.y) * dy), reverse=True)
+    for p in pieces:
+
+        def move():
+            while True:
+                p.x += dx
+                p.y += dy
+                for i in range(p.h):
+                    for j in range(p.w):
+
+                        if p[i, j] == 0:
+                            continue
+
+                        x = j + p.x - out.x
+                        y = i + p.y - out.y
+
+                        if x < 0 or y < 0 or x >= out.w or y >= out.h or out[y, x] != 0:
+                            p.x -= dx
+                            p.y -= dy
+                            return
+
+        move()
+        ret.append(p)
+        out = compose(out, p, 3)
+
+    return ret
+
+
 def my_stack(a: Image, b: Image, orient: int) -> Image:
     assert orient >= 0 and orient <= 3
     b = Image(a.p, b.sz, b.mask)
@@ -973,6 +1011,18 @@ def my_stack(a: Image, b: Image, orient: int) -> Image:
         return compose(c, b)
 
     return compose(a, b)
+
+
+def my_stack_list(lens: List[Image], orient: int) -> Image:
+    n = len(lens)
+    if n == 0:
+        return badImg
+    order = [(lens[i].w * lens[i].h, i) for i in range(n)]
+    order.sort()
+    ret = lens[order[0][1]].copy()
+    for i in range(1, n):
+        ret = my_stack(ret, lens[order[i][1]], orient)
+    return ret
 
 
 def wrap(line: Image, area: Image) -> Image:
@@ -1132,7 +1182,7 @@ def extend(img: Image, room: Image) -> Image:
     return ret
 
 
-def pick_max(v: List[Image], f: Callable[[Image], int]) -> Image:
+def pick_max_internal(v: List[Image], f: Callable[[Image], int]) -> Image:
     if len(v) == 0:
         return badImg
     return max(v, key=f)
@@ -1177,7 +1227,7 @@ def max_criterion(img: Image, id: int) -> int:
 
 
 def pick_max(v: List[Image], id: int) -> Image:
-    return pick_max(v, lambda img: max_criterion(img, id))
+    return pick_max_internal(v, lambda img: max_criterion(img, id))
 
 
 def cut(img: Image, a: Image) -> List[Image]:
@@ -1559,7 +1609,7 @@ def inside_marked(img: Image) -> List[Image]:
                             y = i + (k // 2) * h
                             for d in range(4):
                                 if not (d == k) == (img[y + d // 2, x + d % 2] == col):
-                                   return False
+                                    return False
                         return True
 
                     if check():
@@ -1705,3 +1755,69 @@ def spread_colors(img: Image, skipmaj: bool = False) -> Image:
                 q.append((nj, ni, c))
 
     return img
+
+
+def stack_line(shapes: List[Image]) -> Image:
+    n = len(shapes)
+    if n == 0:
+        return badImg
+    elif n == 1:
+        return shapes[0]
+
+    xs = sorted([shapes[i].x for i in range(n)])
+    ys = sorted([shapes[i].y for i in range(n)])
+
+    xmin, ymin = 1e9, 1e9
+    for i in range(1, n):
+        xmin = min(xmin, xs[i] - xs[i - 1])
+        ymin = min(ymin, ys[i] - ys[i - 1])
+
+    dx, dy = 1, 0
+    if xmin < ymin:
+        dx, dy = 0, 1
+
+    order = sorted([(shapes[i].x * dx + shapes[i].y * dy, i) for i in range(n)])
+    out = shapes[order[0][1]].copy()
+    for i in range(1, n):
+        out = my_stack(out, shapes[order[i][1]], dy)
+    return out
+
+
+def compose_growing(imgs: List[Image]) -> Image:
+    n = len(imgs)
+    if n == 0:
+        return badImg
+
+    order = sorted([(count_nonzero(imgs[i]), i) for i in range(n)])
+    ret = imgs[order[0][1]]
+    for i in range(1, n):
+        ret = compose(ret, imgs[order[i][1]], 0)
+    return ret
+
+
+def pick_unique(imgs: List[Image]) -> Image:
+    """Pick the one with the unique color"""
+    n = len(imgs)
+    if n == 0:
+        return badImg
+
+    mask = [color_mask(imgs[i]) for i in range(n)]
+    cnt = [0] * 10
+    for i in range(n):
+        for c in range(10):
+            if (mask[i] >> c) & 1 != 0:
+                cnt[c] += 1
+
+    reti = -1
+    for i in range(n):
+        for c in range(10):
+            if (mask[i] >> c) & 1 != 0:
+                if cnt[c] == 1:
+                    if reti == -1:
+                        reti = i
+                    else:
+                        return badImg
+
+    if reti == -1:
+        return badImg
+    return imgs[reti]
