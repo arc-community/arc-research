@@ -1,5 +1,5 @@
 from enum import Enum
-from typing import List
+from typing import Dict, List, Tuple, Union
 from arc.interface import Board
 from arc.utils import dataset
 import random
@@ -68,6 +68,9 @@ from image import (
 import typer
 
 
+CacheDict = Dict[int, Union[Image, List[Image]]]
+
+
 class ParameterType(Enum):
     Image = 1
     ImageList = 2
@@ -90,7 +93,7 @@ class Node:
         self.name = name
         self.id = id
 
-    def evaluate(self, input: Image):
+    def evaluate(self, input: CacheDict):
         pass
 
     def fmt(self) -> str:
@@ -105,8 +108,8 @@ class InputNode(Node):
     def __init__(self, id=0):
         super().__init__(ParameterType.Image, "input", id)
 
-    def evaluate(self, input: Image):
-        return input
+    def evaluate(self, cache: CacheDict):
+        return cache[self.id]
 
     def fmt(self):
         return self.name
@@ -122,9 +125,13 @@ class FunctionNode(Node):
         self.fn = fn
         self.input_nodes = [None] * len(fn.parameterTypes)
 
-    def evaluate(self, input: Image):
-        inputs = [n.evaluate(input) for n in self.input_nodes]
-        return self.fn.evaluate(inputs)
+    def evaluate(self, cache: CacheDict):
+        x = cache.get(self.id)
+        if x is None:
+            inputs = [n.evaluate(cache) for n in self.input_nodes]
+            x = self.fn.evaluate(inputs)
+            cache[self.id] = x
+        return x
 
     def connect_input(self, index: int, source_node: Node):
         if index < 0 or index >= len(self.fn.parameterTypes):
@@ -178,7 +185,8 @@ class NodeFactory:
 
 class NodeGraph:
     def __init__(self):
-        self.nodes = [InputNode()]
+        self.input_node = InputNode()
+        self.nodes = [self.input_node]
 
     def add(self, node: Node):
         self.nodes.append(node)
@@ -195,18 +203,21 @@ class NodeGraph:
             s += f"x{n.id} = {n.fmt()}\n"
         return s
 
-    def evaluate(self, input):
-        return [n.evaluate(input) for n in self.nodes]
+    def evaluate(self, input: Image) -> CacheDict:
+        cache = {self.input_node.id: input}
+        for n in self.nodes:
+            n.evaluate(cache)
+        return cache
 
 
 def register_functions(f: NodeFactory):
     # unary
     for i in range(10):
-        f.register_unary(f"filter_color{i}", partial(filter_color, id=i))
+        f.register_unary(f"filter_color_{i}", partial(filter_color, id=i))
     for i in range(10):
-        f.register_unary(f"erase_color{i}", partial(erase_color, col=i))
+        f.register_unary(f"erase_color_{i}", partial(erase_color, col=i))
     for i in range(10):
-        f.register_unary(f"color_shape_const{i}", partial(color_shape_const, id=i))
+        f.register_unary(f"color_shape_const_{i}", partial(color_shape_const, id=i))
 
     f.register_unary("compress", compress)
     f.register_unary("get_pos", get_pos)
@@ -223,11 +234,11 @@ def register_functions(f: NodeFactory):
     f.register_unary("majority_color_image", majority_color_image)
 
     for i in range(1, 9):
-        f.register_unary(f"rigid{i}", partial(rigid, id=i))
+        f.register_unary(f"rigid_{i}", partial(rigid, id=i))
 
     for a in range(3):
         for b in range(3):
-            f.register_unary("count_{a}_{b}", partial(count, id=a, out_type=b))
+            f.register_unary(f"count_{a}_{b}", partial(count, id=a, out_type=b))
 
     for i in range(15):
         f.register_unary(f"smear_{i}", partial(smear, id=i))
@@ -247,7 +258,7 @@ def register_functions(f: NodeFactory):
         f.register_unary(f"spread_colors_{1 if skipmaj else 0}", partial(spread_colors, skipmaj=skipmaj))
 
     for i in range(4):
-        f.register_unary(f"half{i}", partial(half, id=i))
+        f.register_unary(f"half_{i}", partial(half, id=i))
 
     for dy in range(-2, 3, 1):
         for dx in range(-2, 3, 1):
@@ -361,17 +372,8 @@ def generate_random_graph(f: NodeFactory, node_count: int = 5) -> NodeGraph:
     return g
 
 
-def board_to_image(board: Board) -> Image:
-    return Image(Point(), Point(board.num_rows, board.num_cols), board.flat)
-
-
-def image_to_board(img: Image) -> Board:
-    data = [[img[(i, j)] for j in range(img.w)] for i in range(img.h)]
-    return Board.parse_obj(data)
-
-
 def print_image(img):
-    typer.echo(image_to_board(img).fmt(True))
+    typer.echo(img.fmt(True))
     print(f"p: {img.p.x},{img.p.y}; sz: {img.sz.x}x{img.sz.y};")
 
 
@@ -381,6 +383,7 @@ def main():
     f = NodeFactory()
     register_functions(f)
     print("Number of functions:", len(f.functions))
+
     g = generate_random_graph(f, 5)
     print(g.fmt())
 
@@ -391,20 +394,16 @@ def main():
         riddle = dataset.load_riddle_from_id(id)
 
         b = riddle.train[0].input
-        img = board_to_image(b)
+        img = Image.from_board(b)
 
         print_image(img)
 
         outputs = g.evaluate(img)
-        for i, o in enumerate(outputs):
-            print(f"x{i}:")
-            print("depth: ", g.nodes[i].depth)
-            print_image(o)
-
-        # configure DSL operations to include in graph
-        # cache node outputs
-        # output must be at least 1x1 and not larger than max-side-length
-        # each operation in graph should make a difference
+        print(outputs)
+        for k, v in outputs.items():
+            print(k, v)
+            if type(v) == Image:
+                print_image(v)
 
 
 if __name__ == "__main__":

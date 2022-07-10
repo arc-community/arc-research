@@ -1,9 +1,8 @@
 from __future__ import annotations
-from typing import Callable, Iterable, Tuple, overload, List
+from typing import Callable, Iterable, Tuple, List, overload
 from functools import cmp_to_key
 import numpy as np
 from arc.interface import Board
-from pyparsing import col
 
 
 MAXSIDE = 100
@@ -293,8 +292,8 @@ def isRectangle(a: Image) -> bool:
 def clear_dfs(img: Image, r: int, c: int) -> None:
     """clear pixel at r,c and blob of non-zero adjacent pixels"""
     img[r, c] = 0
-    for nr in (r - 1, nr, r + 1):
-        for nc in (c - 1, nc, c + 1):
+    for nr in (r - 1, r, r + 1):
+        for nc in (c - 1, c, c + 1):
             if nr >= 0 and nr < img.h and nc >= 0 and nc < img.w and img[nr, nc] != 0:
                 clear_dfs(img, nr, nc)
 
@@ -1210,7 +1209,6 @@ def max_criterion(img: Image, id: int) -> int:
     elif id == 8:
         comp = compress(img)
         return comp.w * comp.h - count_nonzero(comp)
-
     elif id == 9:
         comp = compress(img)
         return -(comp.w * comp.h - count_nonzero(comp))

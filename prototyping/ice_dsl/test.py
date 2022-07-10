@@ -14,7 +14,7 @@ from image import (
     gravity,
     inside_marked,
     majority_color,
-    makeBorder2,
+    make_border2,
     my_stack_list,
     pick_maxes,
     pick_not_maxes,
@@ -223,7 +223,7 @@ def main():
     print_image(x)
 
     print("makeBorder2")
-    x = makeBorder2(p4)
+    x = make_border2(p4)
     print_image(x)
 
     print("split_colors")
