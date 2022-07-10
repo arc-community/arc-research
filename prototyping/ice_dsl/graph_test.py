@@ -1,5 +1,7 @@
+from __future__ import annotations
+from abc import ABC, abstractmethod
 from enum import Enum
-from typing import Dict, List, Tuple, Union
+from typing import Dict, List, Set, Tuple, Union
 from arc.interface import Board
 from arc.utils import dataset
 import random
@@ -87,19 +89,41 @@ class Function:
         return self.fn(*args)
 
 
-class Node:
+class Node(ABC):
     def __init__(self, return_type: ParameterType, name: str, id: int):
         self.return_type = return_type
         self.name = name
         self.id = id
 
+    @abstractmethod
     def evaluate(self, input: CacheDict):
         pass
 
+    @abstractmethod
     def fmt(self) -> str:
         pass
 
     @property
+    @abstractmethod
+    def inputs(self) -> List[Node]:
+        pass
+
+    def ancestors(self, include_self: bool = False) -> Set[Node]:
+        a = set()
+        if include_self:
+            a.add(self)
+
+        def add_inputs(n):
+            for i in n.inputs:
+                if i is not None and i not in a:
+                    a.add(i)
+                    add_inputs(i)
+
+        add_inputs(self)
+        return a
+
+    @property
+    @abstractmethod
     def depth(self) -> int:
         pass
 
@@ -113,6 +137,10 @@ class InputNode(Node):
 
     def fmt(self):
         return self.name
+
+    @property
+    def inputs(self) -> List[Node]:
+        return []
 
     @property
     def depth(self) -> int:
@@ -148,6 +176,10 @@ class FunctionNode(Node):
         args = (f"x{a.id}" for a in self.input_nodes)
         s = self.name + "(" + ", ".join(args) + ")"
         return s
+
+    @property
+    def inputs(self) -> List[Node]:
+        return self.input_nodes
 
 
 class NodeFactory:
@@ -329,7 +361,7 @@ def register_functions(f: NodeFactory):
             returnType=ParameterType.ImageList,
             parameterTypes=[ParameterType.ImageList],
         )
-    
+
     # f.register(
     #     "replace_colors",
     #     replace_colors,
@@ -377,19 +409,22 @@ def print_image(img):
     print(f"p: {img.p.x},{img.p.y}; sz: {img.sz.x}x{img.sz.y};")
 
 
-
 class InputSampler:
     def __init__(self, riddle_ids, include_outputs=True, include_test=True):
         self.riddle_ids = riddle_ids
         self.riddles = [dataset.load_riddle_from_id(id) for id in self.riddle_ids]
 
-        self.boards = [(r.riddle_id + f'_train{i}_in', t.input) for r in self.riddles for i,t in enumerate(r.train)]
+        self.boards = [(r.riddle_id + f"_train{i}_in", t.input) for r in self.riddles for i, t in enumerate(r.train)]
 
         if include_outputs:
-            self.boards = self.boards + [(r.riddle_id + f'_train{i}_out', t.output) for r in self.riddles for i,t in enumerate(r.train)]
+            self.boards = self.boards + [
+                (r.riddle_id + f"_train{i}_out", t.output) for r in self.riddles for i, t in enumerate(r.train)
+            ]
 
         if include_test:
-            self.boards = self.boards + [(r.riddle_id + f'_test{i}_in', t.input) for r in self.riddles for i,t in enumerate(r.test)]
+            self.boards = self.boards + [
+                (r.riddle_id + f"_test{i}_in", t.input) for r in self.riddles for i, t in enumerate(r.test)
+            ]
 
         self.order = list(range(len(self.boards)))
         self.shuffle()
@@ -403,10 +438,10 @@ class InputSampler:
             self.shuffle()
         i = self.order[self.next_index]
         self.next_index += 1
-        return self.boards[i]
+        return self.boards[i][1]
 
     def next_image(self):
-        board = self.next_index()
+        board = self.next_board()
         return Image.from_board(board)
 
     def next_augmented_image(self):
@@ -414,43 +449,114 @@ class InputSampler:
         image = rigid(image, random.randint(0, 8))
         return image
 
+    def next_composed_image(self, n=2):
+        inputs = [self.next_augmented_image() for _ in range(n)]
+        return compose_growing(inputs)
+
 
 def main():
-    random.seed(42)
+    #random.seed(42)
 
-    print('loading boards')
+    print("loading boards")
     eval_riddle_ids = dataset.get_riddle_ids(["training"])[:101]
     input_sampler = InputSampler(eval_riddle_ids, include_outputs=True, include_test=True)
-    print(f'Total boards: {len(input_sampler.boards)}')
-    
+    print(f"Total boards: {len(input_sampler.boards)}")
+
     f = NodeFactory()
     register_functions(f)
     print("Number of functions:", len(f.functions))
 
-    g = generate_random_graph(f, 5)
-    print(g.fmt())
+    def check_ouputs(node: Node, outputs: CacheDict, prev_outputs: List[CacheDict]):
+        a = node.ancestors(include_self=True)
 
+        # for x in a:
+        #     print("ancestor: ", x.id)
+        #     print_image(outputs[x.id])
 
+        input_image = outputs[0]
+        output_image = outputs[node.id]
 
-    # generate input examples
+        if input_image.mask == output_image.mask:
+            return False
 
-    
+        if input_image.area < 4 or output_image.area < 1:
+            return False
 
-    for i in [100]:
-        id = eval_riddle_ids[i]
-        riddle = dataset.load_riddle_from_id(id)
+        if sum(output_image.mask) == 0:
+            return False    # all zero
 
-        b = riddle.train[0].input
-        img = Image.from_board(b)
+        # check that all image outputs are unique
+        for n in a:
+            if isinstance(n, FunctionNode) and n.return_type == ParameterType.Image:
+                img = outputs[n.id]
+                if img is None or img.area <= 0 or img.w > 32 or img.h > 32:
+                    return False
 
-        print_image(img)
+                if len(prev_outputs) > 0:
+                    for o in prev_outputs:
+                        other_img = o[n.id]
+                        if other_img == img:
+                            return False
 
-        outputs = g.evaluate(img)
-        print(outputs)
-        for k, v in outputs.items():
-            print(k, v)
-            if type(v) == Image:
-                print_image(v)
+        return True
+
+    def find_pair(g: NodeGraph, node: Node, prev_outputs: List[CacheDict], max_tries: int = 100):
+        for trial in range(max_tries):
+            input_image = input_sampler.next_composed_image(n=2)
+            outputs = g.evaluate(input_image)
+            if check_ouputs(node, outputs, prev_outputs):
+                prev_outputs.append(outputs)
+                output_image = outputs[node.id]
+                return (input_image, output_image)
+            trial += 1
+
+        raise RuntimeError("Max retries exceeded")
+
+    def generate_riddle(sample_node_count: int = 10, min_depth: int = 2, max_depth: int = 5):
+        assert min_depth > 0
+
+        g = generate_random_graph(f, sample_node_count)
+        
+
+        # single image output nodes with min_depth are candidates
+        candidates = [
+            n for n in g.nodes if n.depth >= min_depth and n.depth <= max_depth and n.return_type == ParameterType.Image
+        ]
+
+        for node in candidates:
+            num_examples = random.randint(4, 7)  # at least 3 examples + 1 test
+            example_outputs = []
+
+            try:
+                trainig_examples = [find_pair(g, node, example_outputs, max_tries=100) for i in range(num_examples)]
+                return trainig_examples, g, node
+            except:
+                pass
+
+        return None, None, None
+
+    riddles = []
+    while len(riddles) < 3:
+        xs, g, node = generate_riddle(min_depth=2, max_depth=5)
+        if xs == None:
+            print("fail")
+            continue
+
+        print('node:', node.id)
+        print(g.fmt())
+
+        riddles.append(xs)
+        print(f"RIDDLE {len(riddles)}")
+
+        for i, x in enumerate(xs):
+            print(f"example {i}")
+            print("INPUT:")
+            print_image(x[0])
+            print("OUTPUT:")
+            print_image(x[1])
+            print()
+
+    quit()
 
 
 if __name__ == "__main__":

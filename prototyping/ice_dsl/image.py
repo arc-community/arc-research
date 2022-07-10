@@ -26,11 +26,11 @@ class Point:
     def __init__(self, *args):
         if len(args) == 0:
             x, y = 0, 0
-        elif len(args) == 1 and type(args[0]) == tuple and len(args[0]) == 2:
+        elif len(args) == 1 and isinstance(args[0], tuple) and len(args[0]) == 2:
             x, y = args[0]
-        elif len(args) == 1 and type(args[0]) == Point:
+        elif len(args) == 1 and isinstance(args[0], Point):
             x, y = args[0].x, args[0].y
-        elif len(args) == 2 and type(args[0]) == int and type(args[1]) == int:
+        elif len(args) == 2 and type(args[0]) is int and type(args[1]) is int:
             x, y = args
         else:
             raise ValueError("Invalid arguments for Point constructor")
@@ -233,7 +233,7 @@ def full(*args):
         sz = Point(args[1])
         filling = args[2]
     elif len(args) == 2:
-        if type(args[1]) == int:
+        if type(args[1]) is int:
             p = Point(0, 0)
             sz = Point(args[0])
             filling = args[1]
