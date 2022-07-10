@@ -699,7 +699,7 @@ def alignx(a: Image, b: Image, id) -> Image:
     elif id == 1:
         ret.x = b.x
     elif id == 2:
-        ret.x = b.x + (b.w - a.w) / 2
+        ret.x = b.x + (b.w - a.w) // 2
     elif id == 3:
         ret.x = b.x + b.w - a.w
     elif id == 4:
@@ -715,7 +715,7 @@ def aligny(a: Image, b: Image, id: int) -> Image:
     elif id == 1:
         ret.y = b.y
     elif id == 2:
-        ret.y = b.y + (b.h - a.h) / 2
+        ret.y = b.y + (b.h - a.h) // 2
     elif id == 3:
         ret.y = b.y + b.h - a.h
     elif id == 4:
@@ -732,7 +732,7 @@ def align(a: Image, b: Image, idx: int, idy: int) -> Image:
     elif idx == 1:
         ret.x = b.x
     elif idx == 2:
-        ret.x = b.x + (b.w - a.w) / 2
+        ret.x = b.x + (b.w - a.w) // 2
     elif idx == 3:
         ret.x = b.x + b.w - a.w
     elif idx == 4:
@@ -742,7 +742,7 @@ def align(a: Image, b: Image, idx: int, idy: int) -> Image:
     elif idy == 1:
         ret.y = b.y
     elif idy == 2:
-        ret.y = b.y + (b.h - a.h) / 2
+        ret.y = b.y + (b.h - a.h) // 2
     elif idy == 3:
         ret.y = b.y + b.h - a.h
     elif idy == 4:
@@ -1587,13 +1587,13 @@ def split_rows(img: Image) -> List[Image]:
 def half(img: Image, id: int) -> Image:
     assert id >= 0 and id < 4
     if id == 0:
-        return sub_image(img, Point(0, 0), Point(img.w / 2, img.h))
+        return sub_image(img, Point(0, 0), Point(img.w // 2, img.h))
     elif id == 1:
-        return sub_image(img, Point(img.w - img.w / 2, 0), Point(img.w / 2, img.h))
+        return sub_image(img, Point(img.w - img.w // 2, 0), Point(img.w // 2, img.h))
     elif id == 2:
-        return sub_image(img, Point(0, 0), Point(img.w, img.h / 2))
+        return sub_image(img, Point(0, 0), Point(img.w, img.h // 2))
     elif id == 3:
-        return sub_image(img, Point(0, img.h - img.h / 2), Point(img.w, img.h / 2))
+        return sub_image(img, Point(0, img.h - img.h // 2), Point(img.w, img.h // 2))
     else:
         return badImg
 

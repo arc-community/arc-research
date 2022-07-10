@@ -185,7 +185,7 @@ class NodeFactory:
 
 class NodeGraph:
     def __init__(self):
-        self.input_node = InputNode()
+        self.input_node = InputNode(id=0)
         self.nodes = [self.input_node]
 
     def add(self, node: Node):
@@ -377,9 +377,52 @@ def print_image(img):
     print(f"p: {img.p.x},{img.p.y}; sz: {img.sz.x}x{img.sz.y};")
 
 
+
+class InputSampler:
+    def __init__(self, riddle_ids, include_outputs=True, include_test=True):
+        self.riddle_ids = riddle_ids
+        self.riddles = [dataset.load_riddle_from_id(id) for id in self.riddle_ids]
+
+        self.boards = [(r.riddle_id + f'_train{i}_in', t.input) for r in self.riddles for i,t in enumerate(r.train)]
+
+        if include_outputs:
+            self.boards = self.boards + [(r.riddle_id + f'_train{i}_out', t.output) for r in self.riddles for i,t in enumerate(r.train)]
+
+        if include_test:
+            self.boards = self.boards + [(r.riddle_id + f'_test{i}_in', t.input) for r in self.riddles for i,t in enumerate(r.test)]
+
+        self.order = list(range(len(self.boards)))
+        self.shuffle()
+
+    def shuffle(self):
+        random.shuffle(self.order)
+        self.next_index = 0
+
+    def next_board(self):
+        if self.next_index >= len(self.order):
+            self.shuffle()
+        i = self.order[self.next_index]
+        self.next_index += 1
+        return self.boards[i]
+
+    def next_image(self):
+        board = self.next_index()
+        return Image.from_board(board)
+
+    def next_augmented_image(self):
+        image = self.next_image()
+        image = rigid(image, random.randint(0, 8))
+        return image
+
+
 def main():
     random.seed(42)
 
+    print('loading boards')
+    eval_riddle_ids = dataset.get_riddle_ids(["training"])[:101]
+    input_sampler = InputSampler(eval_riddle_ids, include_outputs=True, include_test=True)
+    print(f'Total boards: {len(input_sampler.boards)}')
+    
     f = NodeFactory()
     register_functions(f)
     print("Number of functions:", len(f.functions))
@@ -387,7 +430,11 @@ def main():
     g = generate_random_graph(f, 5)
     print(g.fmt())
 
-    eval_riddle_ids = dataset.get_riddle_ids(["evaluation"])
+
+
+    # generate input examples
+
+    
 
     for i in [100]:
         id = eval_riddle_ids[i]
