@@ -124,6 +124,7 @@ def main():
             )
 
     def check_ids(ids, results):
+        unsolved = []
         for id in ids:
             if id in all_results:
                 test_results = all_results[id]['test']
@@ -133,16 +134,30 @@ def main():
                     solve_args = max([s[0] for s in solved_by], key=lambda x: 40 if x==4 else x)     # max arg for first solution, treat 4 as 40
                 results[id] = solve_args
                 print(f'{id}, {all(test_results)}, {solve_args}')
+                if solve_args < 0:
+                    unsolved.append(id)
             else:
                 results[id] = -2
                 print(f'{id}, False, -2')   # no solution generated
+                unsolved.append(id)
+        return unsolved
             
     results = {}
     print('Training')
-    check_ids(trainig_ids, results)
+    unsolved_train = check_ids(trainig_ids, results)
+
     print()
     print('Evaluation')
-    check_ids(evaluation_ids, results)
+    unsolved_eval = check_ids(evaluation_ids, results)
+
+    # print('Unsolved Riddles')
+    # print('Training')
+    # for id in unsolved_train:
+    #     print(id)
+    # print()
+    # print('Evaluation')
+    # for id in unsolved_eval:
+    #     print(id)
 
     arc_wiki_path = Path('../../../arc.wiki/')
     #update_wiki_files(arc_wiki_path, results) # uncomment to really update wiki files
