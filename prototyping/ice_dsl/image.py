@@ -1571,8 +1571,7 @@ def split_columns(img: Image) -> List[Image]:
     ret = []
     if img.area > 0:
         for j in range(img.w):
-            ret.append(Image(Point(j, 0), Point(1, img.h), [img.mask[i, j] for i in range(img.h)]))
-
+            ret.append(Image(Point(j, 0), Point(1, img.h), [img[i, j] for i in range(img.h)]))
     return ret
 
 
@@ -1580,7 +1579,7 @@ def split_rows(img: Image) -> List[Image]:
     ret = []
     if img.area > 0:
         for i in range(img.h):
-            ret.append(Image(Point(0, i), Point(img.w, 1), [img.mask[i, j] for j in range(img.w)]))
+            ret.append(Image(Point(0, i), Point(img.w, 1), [img[i, j] for j in range(img.w)]))
     return ret
 
 
