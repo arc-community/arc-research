@@ -1,6 +1,5 @@
 from __future__ import annotations
 from abc import ABC, abstractmethod
-from argparse import ArgumentError
 from enum import Enum
 from typing import Dict, List, Set, Tuple, Union
 from arc.interface import Board
@@ -200,6 +199,8 @@ class NodeFactory:
     def register(self, name: str, fn, return_type: ParameterType, parameter_types: List[ParameterType]) -> None:
         assert return_type in (ParameterType.Image, ParameterType.ImageList)
         assert parameter_types != None and len(parameter_types) > 0
+        if name in self.functions:
+            raise ValueError(f"A function with name '{name}' was already registered.")
         self.functions[name] = Function(name, fn, return_type, parameter_types)
 
     def register_unary(self, name: str, fn) -> None:
@@ -216,12 +217,12 @@ class NodeFactory:
         self.next_id += 1
         return FunctionNode(fn, id)
 
-    def sample_function_name(self):
-        fs = list(self.functions.keys())
+    def sample_function_name(self, function_names: List[str] = None):
+        fs = function_names if function_names is not None else list(self.functions.keys())
         return random.choice(fs)
 
-    def create_random_node(self) -> FunctionNode:
-        fn = self.sample_function_name()
+    def create_random_node(self, function_names: List[str] = None) -> FunctionNode:
+        fn = self.sample_function_name(function_names)
         return self.create_node(fn)
 
 
@@ -309,7 +310,7 @@ class NodeGraph:
             or node.fn.parameter_types[0] != ParameterType.Image
             or node.fn.return_type != ParameterType.Image
         ):
-            raise ArgumentError("Invalid node")
+            raise ValueError("Invalid node")
 
         # remove unary function node by replacing it by its input
         replace_by = node.input_nodes[0]
@@ -359,7 +360,7 @@ def register_functions(f: NodeFactory):
     f.register_unary("make_border", partial(make_border, bcol=1))
 
     for b in (False, True):
-        f.register_unary("make_border2", partial(make_border2, usemaj=b))
+        f.register_unary(f"make_border2_{b}", partial(make_border2, usemaj=b))
 
     f.register_unary("compress2", compress2)
     f.register_unary("compress3", compress3)
@@ -396,9 +397,13 @@ def register_functions(f: NodeFactory):
         parameter_types=[ParameterType.Image],
     )
     f.register("split_all", split_all, return_type=ParameterType.ImageList, parameter_types=[ParameterType.Image])
-    f.register("split_columns", split_columns, return_type=ParameterType.ImageList, parameter_types=[ParameterType.Image])
+    f.register(
+        "split_columns", split_columns, return_type=ParameterType.ImageList, parameter_types=[ParameterType.Image]
+    )
     f.register("split_rows", split_rows, return_type=ParameterType.ImageList, parameter_types=[ParameterType.Image])
-    f.register("inside_marked", inside_marked, return_type=ParameterType.ImageList, parameter_types=[ParameterType.Image])
+    f.register(
+        "inside_marked", inside_marked, return_type=ParameterType.ImageList, parameter_types=[ParameterType.Image]
+    )
     for d in range(4):
         f.register(
             f"gravity_{d}",
@@ -464,29 +469,6 @@ def register_functions(f: NodeFactory):
     return f
 
 
-def try_connect_inputs(n: FunctionNode, g: NodeGraph) -> bool:
-    """Try to sample compatible source nodes in graph `g` for all input of the given node `n`."""
-    input_types = set(n.fn.parameter_types)
-    nodes_by_type = {t: g.filter_nodes_by_type(t) for t in input_types}
-    for i, t in enumerate(n.fn.parameter_types):
-        if len(nodes_by_type[t]) == 0:
-            return False
-        source_node = random.choice(nodes_by_type[t])
-        n.connect_input(i, source_node)
-
-    return True
-
-
-def generate_random_graph(f: NodeFactory, node_count: int = 5) -> NodeGraph:
-    """Genaret a random graph with a `node_count` number of random nodes.`"""
-    g = NodeGraph()
-    while len(g) < node_count:
-        n = f.create_random_node()
-        if try_connect_inputs(n, g):
-            g.add(n)
-    return g
-
-
 def print_image(img):
     typer.echo(img.fmt(True))
     print(f"p: {img.p.x},{img.p.y}; sz: {img.sz.x}x{img.sz.y};")
@@ -537,92 +519,170 @@ class InputSampler:
         return compose_growing(inputs)
 
 
-def check_ouputs(node: Node, outputs: CacheDict, prev_outputs: List[CacheDict]):
-    a = node.ancestors(include_self=True)
+class SynthRiddleGen1:
+    def __init__(
+        self,
+        node_factory: NodeFactory,
+        input_sampler: InputSampler,
+        sample_node_count: int = 10,
+        min_depth: int = 2,
+        max_depth: int = 5,
+        max_input_sample_tries: int = 100,
+        function_names: List[str] = None,
+    ):
 
-    input_image = outputs[0]
-    output_image = outputs[node.id]
+        assert min_depth > 0 and min_depth <= max_depth
+        assert sample_node_count > min_depth
 
-    # input must differ from output
-    if input_image.mask == output_image.mask:
-        return False
+        self.node_factory = node_factory
+        self.input_sampler = input_sampler
+        self.sample_node_count = sample_node_count
+        self.min_depth = min_depth
+        self.max_depth = max_depth
+        self.max_input_sample_tries = max_input_sample_tries
+        self.function_names = function_names
 
-    if input_image.area < 4 or output_image.area < 1:
-        return False
+    @staticmethod
+    def try_connect_inputs(n: FunctionNode, g: NodeGraph) -> bool:
+        """Try to sample compatible source nodes in graph `g` for all input of the given node `n`."""
+        input_types = set(n.fn.parameter_types)
+        nodes_by_type = {t: g.filter_nodes_by_type(t) for t in input_types}
+        for i, t in enumerate(n.fn.parameter_types):
+            if len(nodes_by_type[t]) == 0:
+                return False
+            source_node = random.choice(nodes_by_type[t])
+            n.connect_input(i, source_node)
 
-    if sum(output_image.mask) == 0:
-        return False  # all zero
+        return True
 
-    # input and output must be unique
-    for o in prev_outputs:
-        other_input = o[0]
-        other_output = o[node.id]
-        if other_input == input_image or other_output == output_image:
+    @staticmethod
+    def generate_random_graph(f: NodeFactory, node_count: int = 5, function_names: List[str] = None) -> NodeGraph:
+        """Genaret a random graph with a `node_count` number of random nodes.`"""
+        g = NodeGraph()
+        while len(g) < node_count:
+            n = f.create_random_node(function_names)
+            if SynthRiddleGen1.try_connect_inputs(n, g):
+                g.add(n)
+        return g
+
+    @staticmethod
+    def remove_nops(
+        g: NodeGraph, output_node: Node, node_outputs: List[CacheDict], trainig_examples: List[Tuple[Image, Image]]
+    ):
+        g = g.copy()
+        for n in g.nodes.copy():
+            if type(n) is FunctionNode and n.is_unary_image:  # unary function
+                # if all outputs of this node are identical for all training examples it can be removed from the graph
+                v = [o[n.id] for o in node_outputs]
+                if all(x == v[0] for x in v):
+                    g.remove_unary_image(n)
+
+        # for each unary function determine if it has an influence on the output of at least one examples, if not remove it
+        for n in g.nodes.copy():
+            if type(n) is FunctionNode and n.is_unary_image:  # unary function
+                gc = g.copy()
+                nc = gc.get_node_by_id(n.id)
+                if n.id == output_node.id:
+                    no = gc.remove_unary_image(nc)
+                else:
+                    gc.remove_unary_image(nc)
+                    no = gc.get_node_by_id(output_node.id)
+
+                all_equal = True
+                for a, b in trainig_examples:
+                    b_ = gc.evaluate(a)[no.id]
+                    if b_.mask != b.mask:
+                        all_equal = False
+                        break
+
+                if all_equal:
+                    g = gc
+                    output_node = no
+
+        return g, output_node
+
+    def __check_ouputs(self, node: Node, outputs: CacheDict, prev_outputs: List[CacheDict]):
+        a = node.ancestors(include_self=True)
+
+        input_image = outputs[0]
+        output_image = outputs[node.id]
+
+        # input must differ from output
+        if input_image.mask == output_image.mask:
             return False
 
-    # all image must stay in limits
-    for n in a:
-        if isinstance(n, FunctionNode) and n.return_type == ParameterType.Image:
-            img = outputs[n.id]
-            if img is None or img.area <= 0 or img.w > 32 or img.h > 32:
+        if input_image.area < 4 or output_image.area < 1:
+            return False
+
+        if sum(output_image.mask) == 0:
+            return False  # all zero
+
+        # input and output must be unique
+        for o in prev_outputs:
+            other_input = o[0]
+            other_output = o[node.id]
+            if other_input == input_image or other_output == output_image:
                 return False
 
-    return True
+        # all image must stay in limits
+        for n in a:
+            if isinstance(n, FunctionNode) and n.return_type == ParameterType.Image:
+                img = outputs[n.id]
+                if img is None or img.area <= 0 or img.w > 32 or img.h > 32:
+                    return False
 
+        return True
 
-def find_pair(
-    input_sampler, g: NodeGraph, node: Node, prev_outputs: List[CacheDict], max_tries: int = 100
-) -> Tuple[Image, Image]:
-    for trial in range(max_tries):
-        input_image = input_sampler.next_composed_image(n=2)
-        outputs = g.evaluate(input_image)
-        if check_ouputs(node, outputs, prev_outputs):
-            prev_outputs.append(outputs)
-            output_image = outputs[node.id]
-            return (input_image, output_image)
-        trial += 1
+    def __find_pair(
+        self, g: NodeGraph, node: Node, prev_outputs: List[CacheDict], max_tries: int = 100
+    ) -> Tuple[Image, Image]:
+        for trial in range(max_tries):
+            input_image = self.input_sampler.next_composed_image(n=2)
+            outputs = g.evaluate(input_image)
+            if self.__check_ouputs(node, outputs, prev_outputs):
+                prev_outputs.append(outputs)
+                output_image = outputs[node.id]
+                return (input_image, output_image)
+            trial += 1
 
-    raise RuntimeError("Max retries exceeded")
+        raise RuntimeError("Max retries exceeded")
 
+    def generate_riddle(self):
+        assert self.min_depth > 0 and self.sample_node_count > self.min_depth
 
-def remove_nops(
-    g: NodeGraph, output_node: Node, node_outputs: List[CacheDict], trainig_examples: List[Tuple[Image, Image]]
-):
-    g = g.copy()
-    for n in g.nodes.copy():
-        if type(n) is FunctionNode and n.is_unary_image:  # unary function
-            # if all outputs of this node are identical it can be removed from the graph
-            v = [o[n.id] for o in node_outputs]
-            if all(x == v[0] for x in v):
-                g.remove_unary_image(n)
+        g = SynthRiddleGen1.generate_random_graph(self.node_factory, self.sample_node_count, self.function_names)
 
-    # for each unary function determine if it has an influence on the output of at least one examples
-    for n in g.nodes.copy():
-        if type(n) is FunctionNode and n.is_unary_image:  # unary function
-            gc = g.copy()
-            nc = gc.get_node_by_id(n.id)
-            if n.id == output_node.id:
-                no = gc.remove_unary_image(nc)
-            else:
-                gc.remove_unary_image(nc)
-                no = gc.get_node_by_id(output_node.id)
+        # single image output nodes with min_depth are candidates
+        candidates = [
+            n
+            for n in g.nodes
+            if n.depth >= self.min_depth and n.depth <= self.max_depth and n.return_type == ParameterType.Image
+        ]
 
-            all_equal = True
-            for a, b in trainig_examples:
-                b_ = gc.evaluate(a)[no.id]
-                if b_.mask != b.mask:
-                    all_equal = False
-                    break
+        for node in candidates:
+            num_examples = random.randint(4, 7)  # at least 3 examples + 1 test
+            example_outputs = []
 
-            if all_equal:
-                g = gc
-                output_node = no
+            try:
+                g2 = NodeGraph.from_ancestors(node)
+                trainig_examples = [
+                    self.__find_pair(g2, node, example_outputs, max_tries=self.max_input_sample_tries)
+                    for i in range(num_examples)
+                ]
+                # print("before NOP removal", g2.fmt())
+                g2, node = SynthRiddleGen1.remove_nops(g2, node, example_outputs, trainig_examples)
+                if node.depth < self.min_depth:
+                    continue  # graph after pruning too shallow
 
-    return g, output_node
+                # print("after NOP remoal", g2.fmt())
+                return trainig_examples, g2, node
+            except RuntimeError:
+                pass
 
+        return None, None, None
 
 def main():
-    random.seed(109)
+    random.seed(110)
 
     print("loading boards")
     eval_riddle_ids = dataset.get_riddle_ids(["training"])[:101]
@@ -633,37 +693,12 @@ def main():
     register_functions(f)
     print("Number of functions:", len(f.functions))
 
-    def generate_riddle(sample_node_count: int = 10, min_depth: int = 2, max_depth: int = 5):
-        assert min_depth > 0
-
-        g = generate_random_graph(f, sample_node_count)
-
-        # single image output nodes with min_depth are candidates
-        candidates = [
-            n for n in g.nodes if n.depth >= min_depth and n.depth <= max_depth and n.return_type == ParameterType.Image
-        ]
-
-        for node in candidates:
-            num_examples = random.randint(4, 7)  # at least 3 examples + 1 test
-            example_outputs = []
-
-            try:
-                g2 = NodeGraph.from_ancestors(node)
-                trainig_examples = [
-                    find_pair(input_sampler, g2, node, example_outputs, max_tries=100) for i in range(num_examples)
-                ]
-                #print("before NOP removal", g2.fmt())
-                g2, node = remove_nops(g2, node, example_outputs, trainig_examples)
-                #print("after NOP remoal", g2.fmt())
-                return trainig_examples, g2, node
-            except RuntimeError:
-                pass
-
-        return None, None, None
+    function_names = ['rigid_1', 'rigid_2', 'rigid_3', 'rigid_4', 'rigid_5', 'rigid_6', 'rigid_7', 'rigid_8', 'half_0', 'half_1', 'half_2', 'half_3']
+    riddle_gen = SynthRiddleGen1(f, input_sampler, min_depth=1, max_depth=1, function_names=function_names)
 
     riddles = []
-    while len(riddles) < 1:
-        xs, g, node = generate_riddle(min_depth=2, max_depth=5)
+    while len(riddles) < 10:
+        xs, g, node = riddle_gen.generate_riddle()
         if xs == None:
             print("fail")
             continue
