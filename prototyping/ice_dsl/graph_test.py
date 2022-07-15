@@ -346,6 +346,8 @@ def register_functions(f: NodeFactory):
     f.register_unary("border", border)
     f.register_unary("center", center)
     f.register_unary("majority_color_image", majority_color_image)
+    f.register_unary("replace_colors", replace_colors)
+    f.register_unary("filter_color_palette", filter_color_palette)
 
     for i in range(1, 9):
         f.register_unary(f"rigid_{i}", partial(rigid, id=i))
@@ -448,13 +450,6 @@ def register_functions(f: NodeFactory):
             parameter_types=[ParameterType.ImageList],
         )
 
-    # f.register(
-    #     "replace_colors",
-    #     replace_colors,
-    #     ParameterType.Image,
-    #     [ParameterType.Image, ParameterType.Image],
-    # )
-
     # for i in range(6):
     #     f.register(
     #         f"compose{i}",
@@ -463,9 +458,7 @@ def register_functions(f: NodeFactory):
     #         [ParameterType.Image, ParameterType.Image],
     #     )
     #     f.register(f"compose_list{i}", partial(compose_list, id=i), ParameterType.Image, [ParameterType.ImageList])
-    # f.register(
-    #     "filter_color_palette", filter_color_palette, ParameterType.Image, [ParameterType.Image, ParameterType.Image]
-    # )
+
     return f
 
 
@@ -681,6 +674,7 @@ class SynthRiddleGen1:
 
         return None, None, None
 
+
 def main():
     random.seed(110)
 
@@ -693,7 +687,20 @@ def main():
     register_functions(f)
     print("Number of functions:", len(f.functions))
 
-    function_names = ['rigid_1', 'rigid_2', 'rigid_3', 'rigid_4', 'rigid_5', 'rigid_6', 'rigid_7', 'rigid_8', 'half_0', 'half_1', 'half_2', 'half_3']
+    function_names = [
+        "rigid_1",
+        "rigid_2",
+        "rigid_3",
+        "rigid_4",
+        "rigid_5",
+        "rigid_6",
+        "rigid_7",
+        "rigid_8",
+        "half_0",
+        "half_1",
+        "half_2",
+        "half_3",
+    ]
     riddle_gen = SynthRiddleGen1(f, input_sampler, min_depth=1, max_depth=1, function_names=function_names)
 
     riddles = []
