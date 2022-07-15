@@ -1,11 +1,13 @@
 from __future__ import annotations
 from abc import ABC, abstractmethod
+from argparse import ArgumentError
 from enum import Enum
 from typing import Dict, List, Set, Tuple, Union
 from arc.interface import Board
 from arc.utils import dataset
 import random
 from functools import partial
+
 from image import (
     Point,
     Image,
@@ -79,11 +81,11 @@ class ParameterType(Enum):
 
 
 class Function:
-    def __init__(self, name: str, fn, returnType: ParameterType, parameterTypes: List[ParameterType]):
+    def __init__(self, name: str, fn, return_type: ParameterType, parameter_types: List[ParameterType]):
         self.name = name
         self.fn = fn
-        self.returnType = returnType
-        self.parameterTypes = parameterTypes
+        self.return_type = return_type
+        self.parameter_types = parameter_types
 
     def evaluate(self, args):
         return self.fn(*args)
@@ -149,9 +151,9 @@ class InputNode(Node):
 
 class FunctionNode(Node):
     def __init__(self, fn: Function, id: int):
-        super().__init__(fn.returnType, fn.name, id)
+        super().__init__(fn.return_type, fn.name, id)
         self.fn = fn
-        self.input_nodes = [None] * len(fn.parameterTypes)
+        self.input_nodes = [None] * len(fn.parameter_types)
 
     def evaluate(self, cache: CacheDict):
         x = cache.get(self.id)
@@ -162,9 +164,9 @@ class FunctionNode(Node):
         return x
 
     def connect_input(self, index: int, source_node: Node):
-        if index < 0 or index >= len(self.fn.parameterTypes):
+        if index < 0 or index >= len(self.fn.parameter_types):
             raise IndexError("Index out of range")
-        if source_node.return_type != self.fn.parameterTypes[index]:
+        if source_node.return_type != self.fn.parameter_types[index]:
             raise ValueError("Source node type does not match input parameter type")
         self.input_nodes[index] = source_node
 
@@ -181,23 +183,31 @@ class FunctionNode(Node):
     def inputs(self) -> List[Node]:
         return self.input_nodes
 
+    @property
+    def is_unary_image(self) -> bool:
+        return (
+            len(self.input_nodes) == 1
+            and self.fn.parameter_types[0] == ParameterType.Image
+            and self.fn.return_type == ParameterType.Image
+        )
+
 
 class NodeFactory:
     def __init__(self):
         self.functions = {}
         self.next_id = 1
 
-    def register(self, name: str, fn, returnType: ParameterType, parameterTypes: List[ParameterType]) -> None:
-        assert returnType in (ParameterType.Image, ParameterType.ImageList)
-        assert parameterTypes != None and len(parameterTypes) > 0
-        self.functions[name] = Function(name, fn, returnType, parameterTypes)
+    def register(self, name: str, fn, return_type: ParameterType, parameter_types: List[ParameterType]) -> None:
+        assert return_type in (ParameterType.Image, ParameterType.ImageList)
+        assert parameter_types != None and len(parameter_types) > 0
+        self.functions[name] = Function(name, fn, return_type, parameter_types)
 
     def register_unary(self, name: str, fn) -> None:
-        self.register(name, fn, returnType=ParameterType.Image, parameterTypes=[ParameterType.Image])
+        self.register(name, fn, return_type=ParameterType.Image, parameter_types=[ParameterType.Image])
 
     def register_binary(self, name: str, fn) -> None:
         self.register(
-            name, fn, returnType=ParameterType.Image, parameterTypes=[ParameterType.Image, ParameterType.Image]
+            name, fn, return_type=ParameterType.Image, parameter_types=[ParameterType.Image, ParameterType.Image]
         )
 
     def create_node(self, function_name) -> FunctionNode:
@@ -220,6 +230,29 @@ class NodeGraph:
         self.input_node = InputNode(id=0)
         self.nodes = [self.input_node]
 
+    @classmethod
+    def from_ancestors(cls, n: Node):
+        """create new graph that only contains the nodes which are directly or indireltcy referenced by n"""
+        nodes = list(n.ancestors(include_self=True))
+        g = cls()
+        g.input_node = next(filter(lambda x: isinstance(x, InputNode), nodes))
+        g.nodes = nodes
+        g.sort_nodes()
+        return g
+
+    def sort_nodes(self):
+        """Sort internal node list from input to output. Sorting is not required for correct graph evaluation, but it can help debugging."""
+        cur = set(x for x in self.nodes if len(x.inputs) == 0)
+        remain_nodes = set(self.nodes) - cur
+        l = list(cur)
+        while len(remain_nodes) > 0:
+            to_add = set(x for x in remain_nodes if all((y in cur) for y in x.inputs))
+            cur = cur.union(to_add)
+            l.extend(to_add)
+            remain_nodes = remain_nodes - to_add
+        assert len(l) == len(self.nodes)
+        self.nodes = l
+
     def add(self, node: Node):
         self.nodes.append(node)
 
@@ -240,6 +273,54 @@ class NodeGraph:
         for n in self.nodes:
             n.evaluate(cache)
         return cache
+
+    def get_node_by_id(self, id: int) -> Node:
+        for n in self.nodes:
+            if n.id == id:
+                return n
+        raise KeyError(f"Node with id '{id}' not found.")
+
+    def copy(self) -> NodeGraph:
+        ng = NodeGraph()
+        clones = {ng.input_node.id: ng.input_node}
+
+        def clone_node_recursive(src: Node):
+            if src == None:
+                return None
+
+            if src.id in clones:
+                return clones[src.id]
+
+            if type(src) is FunctionNode:
+                fnn = FunctionNode(src.fn, src.id)
+                fnn.input_nodes = [clone_node_recursive(src_in) for src_in in src.input_nodes]
+                clones[fnn.id] = fnn
+                return fnn
+
+            raise RuntimeError(f"Cannot clone node of type {type(src)}")
+
+        ng.nodes = [clone_node_recursive(n) for n in self.nodes]
+        return ng
+
+    def remove_unary_image(self, node: FunctionNode) -> Node:
+        if (
+            type(node) is not FunctionNode
+            or len(node.input_nodes) != 1
+            or node.fn.parameter_types[0] != ParameterType.Image
+            or node.fn.return_type != ParameterType.Image
+        ):
+            raise ArgumentError("Invalid node")
+
+        # remove unary function node by replacing it by its input
+        replace_by = node.input_nodes[0]
+        for m in self.nodes:
+            if isinstance(m, FunctionNode):
+                for i, inode in enumerate(m.input_nodes):
+                    if inode == node:
+                        m.input_nodes[i] = replace_by
+
+        self.nodes.remove(node)
+        return replace_by
 
 
 def register_functions(f: NodeFactory):
@@ -307,23 +388,23 @@ def register_functions(f: NodeFactory):
     f.register_binary("mirror_1", partial(mirror, pad=1))
 
     # split
-    f.register("cut_image", cut_image, returnType=ParameterType.ImageList, parameterTypes=[ParameterType.Image])
+    f.register("cut_image", cut_image, return_type=ParameterType.ImageList, parameter_types=[ParameterType.Image])
     f.register(
         "split_colors",
         partial(split_colors, include0=False),
-        returnType=ParameterType.ImageList,
-        parameterTypes=[ParameterType.Image],
+        return_type=ParameterType.ImageList,
+        parameter_types=[ParameterType.Image],
     )
-    f.register("split_all", split_all, returnType=ParameterType.ImageList, parameterTypes=[ParameterType.Image])
-    f.register("split_columns", split_columns, returnType=ParameterType.ImageList, parameterTypes=[ParameterType.Image])
-    f.register("split_rows", split_rows, returnType=ParameterType.ImageList, parameterTypes=[ParameterType.Image])
-    f.register("inside_marked", inside_marked, returnType=ParameterType.ImageList, parameterTypes=[ParameterType.Image])
+    f.register("split_all", split_all, return_type=ParameterType.ImageList, parameter_types=[ParameterType.Image])
+    f.register("split_columns", split_columns, return_type=ParameterType.ImageList, parameter_types=[ParameterType.Image])
+    f.register("split_rows", split_rows, return_type=ParameterType.ImageList, parameter_types=[ParameterType.Image])
+    f.register("inside_marked", inside_marked, return_type=ParameterType.ImageList, parameter_types=[ParameterType.Image])
     for d in range(4):
         f.register(
             f"gravity_{d}",
             partial(gravity, d=d),
-            returnType=ParameterType.ImageList,
-            parameterTypes=[ParameterType.Image],
+            return_type=ParameterType.ImageList,
+            parameter_types=[ParameterType.Image],
         )
 
     # join
@@ -331,20 +412,20 @@ def register_functions(f: NodeFactory):
         f.register(
             f"pick_max_{id}",
             partial(pick_max, id=id),
-            returnType=ParameterType.Image,
-            parameterTypes=[ParameterType.ImageList],
+            return_type=ParameterType.Image,
+            parameter_types=[ParameterType.ImageList],
         )
-    f.register(f"pick_unique", pick_unique, returnType=ParameterType.Image, parameterTypes=[ParameterType.ImageList])
+    f.register(f"pick_unique", pick_unique, return_type=ParameterType.Image, parameter_types=[ParameterType.ImageList])
     f.register(
-        "compose_growing", compose_growing, returnType=ParameterType.Image, parameterTypes=[ParameterType.ImageList]
+        "compose_growing", compose_growing, return_type=ParameterType.Image, parameter_types=[ParameterType.ImageList]
     )
-    f.register("stack_line", stack_line, returnType=ParameterType.Image, parameterTypes=[ParameterType.ImageList])
+    f.register("stack_line", stack_line, return_type=ParameterType.Image, parameter_types=[ParameterType.ImageList])
     for id in range(4):
         f.register(
             f"my_stack_list_{id}",
             partial(my_stack_list, orient=id),
-            returnType=ParameterType.Image,
-            parameterTypes=[ParameterType.ImageList],
+            return_type=ParameterType.Image,
+            parameter_types=[ParameterType.ImageList],
         )
 
     # vector
@@ -352,14 +433,14 @@ def register_functions(f: NodeFactory):
         f.register(
             f"pick_maxes_{id}",
             partial(pick_maxes, id=id),
-            returnType=ParameterType.ImageList,
-            parameterTypes=[ParameterType.ImageList],
+            return_type=ParameterType.ImageList,
+            parameter_types=[ParameterType.ImageList],
         )
         f.register(
             f"pick_not_maxes_{id}",
             partial(pick_not_maxes, id=id),
-            returnType=ParameterType.ImageList,
-            parameterTypes=[ParameterType.ImageList],
+            return_type=ParameterType.ImageList,
+            parameter_types=[ParameterType.ImageList],
         )
 
     # f.register(
@@ -384,9 +465,10 @@ def register_functions(f: NodeFactory):
 
 
 def try_connect_inputs(n: FunctionNode, g: NodeGraph) -> bool:
-    input_types = set(n.fn.parameterTypes)
+    """Try to sample compatible source nodes in graph `g` for all input of the given node `n`."""
+    input_types = set(n.fn.parameter_types)
     nodes_by_type = {t: g.filter_nodes_by_type(t) for t in input_types}
-    for i, t in enumerate(n.fn.parameterTypes):
+    for i, t in enumerate(n.fn.parameter_types):
         if len(nodes_by_type[t]) == 0:
             return False
         source_node = random.choice(nodes_by_type[t])
@@ -396,6 +478,7 @@ def try_connect_inputs(n: FunctionNode, g: NodeGraph) -> bool:
 
 
 def generate_random_graph(f: NodeFactory, node_count: int = 5) -> NodeGraph:
+    """Genaret a random graph with a `node_count` number of random nodes.`"""
     g = NodeGraph()
     while len(g) < node_count:
         n = f.create_random_node()
@@ -454,8 +537,92 @@ class InputSampler:
         return compose_growing(inputs)
 
 
+def check_ouputs(node: Node, outputs: CacheDict, prev_outputs: List[CacheDict]):
+    a = node.ancestors(include_self=True)
+
+    input_image = outputs[0]
+    output_image = outputs[node.id]
+
+    # input must differ from output
+    if input_image.mask == output_image.mask:
+        return False
+
+    if input_image.area < 4 or output_image.area < 1:
+        return False
+
+    if sum(output_image.mask) == 0:
+        return False  # all zero
+
+    # input and output must be unique
+    for o in prev_outputs:
+        other_input = o[0]
+        other_output = o[node.id]
+        if other_input == input_image or other_output == output_image:
+            return False
+
+    # all image must stay in limits
+    for n in a:
+        if isinstance(n, FunctionNode) and n.return_type == ParameterType.Image:
+            img = outputs[n.id]
+            if img is None or img.area <= 0 or img.w > 32 or img.h > 32:
+                return False
+
+    return True
+
+
+def find_pair(
+    input_sampler, g: NodeGraph, node: Node, prev_outputs: List[CacheDict], max_tries: int = 100
+) -> Tuple[Image, Image]:
+    for trial in range(max_tries):
+        input_image = input_sampler.next_composed_image(n=2)
+        outputs = g.evaluate(input_image)
+        if check_ouputs(node, outputs, prev_outputs):
+            prev_outputs.append(outputs)
+            output_image = outputs[node.id]
+            return (input_image, output_image)
+        trial += 1
+
+    raise RuntimeError("Max retries exceeded")
+
+
+def remove_nops(
+    g: NodeGraph, output_node: Node, node_outputs: List[CacheDict], trainig_examples: List[Tuple[Image, Image]]
+):
+    g = g.copy()
+    for n in g.nodes.copy():
+        if type(n) is FunctionNode and n.is_unary_image:  # unary function
+            # if all outputs of this node are identical it can be removed from the graph
+            v = [o[n.id] for o in node_outputs]
+            if all(x == v[0] for x in v):
+                g.remove_unary_image(n)
+
+    # for each unary function determine if it has an influence on the output of at least one examples
+    for n in g.nodes.copy():
+        if type(n) is FunctionNode and n.is_unary_image:  # unary function
+            gc = g.copy()
+            nc = gc.get_node_by_id(n.id)
+            if n.id == output_node.id:
+                no = gc.remove_unary_image(nc)
+            else:
+                gc.remove_unary_image(nc)
+                no = gc.get_node_by_id(output_node.id)
+
+            all_equal = True
+            for a, b in trainig_examples:
+                b_ = gc.evaluate(a)[no.id]
+                if b_.mask != b.mask:
+                    all_equal = False
+                    break
+
+            if all_equal:
+                g = gc
+                output_node = no
+
+    return g, output_node
+
+
 def main():
-    #random.seed(42)
+    random.seed(109)
 
     print("loading boards")
     eval_riddle_ids = dataset.get_riddle_ids(["training"])[:101]
@@ -466,57 +633,10 @@ def main():
     register_functions(f)
     print("Number of functions:", len(f.functions))
 
-    def check_ouputs(node: Node, outputs: CacheDict, prev_outputs: List[CacheDict]):
-        a = node.ancestors(include_self=True)
-
-        # for x in a:
-        #     print("ancestor: ", x.id)
-        #     print_image(outputs[x.id])
-
-        input_image = outputs[0]
-        output_image = outputs[node.id]
-
-        if input_image.mask == output_image.mask:
-            return False
-
-        if input_image.area < 4 or output_image.area < 1:
-            return False
-
-        if sum(output_image.mask) == 0:
-            return False    # all zero
-
-        # check that all image outputs are unique
-        for n in a:
-            if isinstance(n, FunctionNode) and n.return_type == ParameterType.Image:
-                img = outputs[n.id]
-                if img is None or img.area <= 0 or img.w > 32 or img.h > 32:
-                    return False
-
-                if len(prev_outputs) > 0:
-                    for o in prev_outputs:
-                        other_img = o[n.id]
-                        if other_img == img:
-                            return False
-
-        return True
-
-    def find_pair(g: NodeGraph, node: Node, prev_outputs: List[CacheDict], max_tries: int = 100):
-        for trial in range(max_tries):
-            input_image = input_sampler.next_composed_image(n=2)
-            outputs = g.evaluate(input_image)
-            if check_ouputs(node, outputs, prev_outputs):
-                prev_outputs.append(outputs)
-                output_image = outputs[node.id]
-                return (input_image, output_image)
-            trial += 1
-
-        raise RuntimeError("Max retries exceeded")
-
     def generate_riddle(sample_node_count: int = 10, min_depth: int = 2, max_depth: int = 5):
         assert min_depth > 0
 
         g = generate_random_graph(f, sample_node_count)
-        
 
         # single image output nodes with min_depth are candidates
         candidates = [
@@ -528,22 +648,25 @@ def main():
             example_outputs = []
 
             try:
-                trainig_examples = [find_pair(g, node, example_outputs, max_tries=100) for i in range(num_examples)]
-                return trainig_examples, g, node
-            except:
+                g2 = NodeGraph.from_ancestors(node)
+                trainig_examples = [
+                    find_pair(input_sampler, g2, node, example_outputs, max_tries=100) for i in range(num_examples)
+                ]
+                #print("before NOP removal", g2.fmt())
+                g2, node = remove_nops(g2, node, example_outputs, trainig_examples)
+                #print("after NOP remoal", g2.fmt())
+                return trainig_examples, g2, node
+            except RuntimeError:
                 pass
 
         return None, None, None
 
     riddles = []
-    while len(riddles) < 3:
+    while len(riddles) < 1:
         xs, g, node = generate_riddle(min_depth=2, max_depth=5)
         if xs == None:
             print("fail")
             continue
-
-        print('node:', node.id)
-        print(g.fmt())
 
         riddles.append(xs)
         print(f"RIDDLE {len(riddles)}")
@@ -555,6 +678,17 @@ def main():
             print("OUTPUT:")
             print_image(x[1])
             print()
+
+            # print("begin")
+            # blub = g.evaluate(x[0])
+            # for n in g.nodes:
+            #     if n.return_type == ParameterType.Image:
+            #         print("node output:", type(n).__name__, n.id)
+            #         print_image(blub[n.id])
+            # print("end")
+
+        print(g.fmt())
+        print("node:", node.id)
 
     quit()
 
