@@ -2,7 +2,6 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from enum import Enum
 from typing import Dict, List, Set, Tuple, Union
-from arc.interface import Board
 from arc.utils import dataset
 import random
 from functools import partial
@@ -673,67 +672,3 @@ class SynthRiddleGen1:
                 pass
 
         return None, None, None
-
-
-def main():
-    random.seed(110)
-
-    print("loading boards")
-    eval_riddle_ids = dataset.get_riddle_ids(["training"])[:101]
-    input_sampler = InputSampler(eval_riddle_ids, include_outputs=True, include_test=True)
-    print(f"Total boards: {len(input_sampler.boards)}")
-
-    f = NodeFactory()
-    register_functions(f)
-    print("Number of functions:", len(f.functions))
-
-    function_names = [
-        "rigid_1",
-        "rigid_2",
-        "rigid_3",
-        "rigid_4",
-        "rigid_5",
-        "rigid_6",
-        "rigid_7",
-        "rigid_8",
-        "half_0",
-        "half_1",
-        "half_2",
-        "half_3",
-    ]
-    riddle_gen = SynthRiddleGen1(f, input_sampler, min_depth=1, max_depth=1, function_names=function_names)
-
-    riddles = []
-    while len(riddles) < 10:
-        xs, g, node = riddle_gen.generate_riddle()
-        if xs == None:
-            print("fail")
-            continue
-
-        riddles.append(xs)
-        print(f"RIDDLE {len(riddles)}")
-
-        for i, x in enumerate(xs):
-            print(f"example {i}")
-            print("INPUT:")
-            print_image(x[0])
-            print("OUTPUT:")
-            print_image(x[1])
-            print()
-
-            # print("begin")
-            # blub = g.evaluate(x[0])
-            # for n in g.nodes:
-            #     if n.return_type == ParameterType.Image:
-            #         print("node output:", type(n).__name__, n.id)
-            #         print_image(blub[n.id])
-            # print("end")
-
-        print(g.fmt())
-        print("node:", node.id)
-
-    quit()
-
-
-if __name__ == "__main__":
-    main()
