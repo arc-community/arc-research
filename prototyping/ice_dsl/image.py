@@ -1562,6 +1562,7 @@ def split_all(img: Image) -> List[Image]:
 
 
 def erase_color(img: Image, col: int) -> Image:
+    img = img.copy()
     for i in range(img.h):
         for j in range(img.w):
             if img[i, j] == col:
@@ -1751,6 +1752,7 @@ def connect(img: Image, id: int) -> Image:
 
 
 def spread_colors(img: Image, skipmaj: bool = False) -> Image:
+    img = img.copy()
     skipcol = -1
     if skipmaj:
         skipcol = majority_color(img)

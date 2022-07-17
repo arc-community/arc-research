@@ -189,6 +189,15 @@ class FunctionNode(Node):
             and self.fn.return_type == ParameterType.Image
         )
 
+    @property
+    def is_binary_image(self) -> bool:
+        return (
+            len(self.input_nodes) == 2
+            and self.fn.parameter_types[0] == ParameterType.Image
+            and self.fn.parameter_types[1] == ParameterType.Image
+            and self.fn.return_type == ParameterType.Image
+        )
+
 
 class NodeFactory:
     def __init__(self):
@@ -369,9 +378,9 @@ def register_functions(f: NodeFactory):
     # unary
     for i in range(10):
         f.register_unary(f"filter_color_{i}", partial(filter_color, id=i))
-    for i in range(10):
+    for i in range(1,10):
         f.register_unary(f"erase_color_{i}", partial(erase_color, col=i))
-    for i in range(10):
+    for i in range(1,10):
         f.register_unary(f"color_shape_const_{i}", partial(color_shape_const, id=i))
 
     f.register_unary("compress", compress)
