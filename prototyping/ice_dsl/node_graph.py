@@ -322,6 +322,48 @@ class NodeGraph:
         self.nodes.remove(node)
         return replace_by
 
+    def serialize(self, debug: bool = False, simplify_ids: bool = True) -> dict:
+        if simplify_ids:
+            g = self.copy()
+            for i, n in enumerate(g.nodes):
+                n.id = i
+        else:
+            g = self
+
+        vertices = [(n.id, n.name) for n in g.nodes]
+        edges = []
+        for n in g.nodes:
+            if isinstance(n, FunctionNode):
+                source_ids = [inode.id for inode in n.input_nodes]
+            else:
+                source_ids = []
+
+            edges.append(source_ids)
+        d = {"nodes": vertices, "inputs": edges}
+        if debug:
+            d["__debug"] = g.fmt()
+        return d
+
+    @classmethod
+    def deserialize(cls, f: NodeFactory, d: dict):
+        ng = cls()
+        node_by_id = {ng.input_node.id: ng.input_node}
+        vertices, edges = d["nodes"], d["inputs"]
+        for id, fname in vertices:
+            if fname == "input":
+                assert id == 0
+                continue
+            n = f.create_node(fname)
+            node_by_id[id] = n
+            ng.add(n)
+
+        for i, src_ids in enumerate(edges):
+            n = ng.nodes[i]
+            if isinstance(n, FunctionNode):
+                for j, id in enumerate(src_ids):
+                    n.connect_input(j, node_by_id[id])
+        return ng
+
 
 def register_functions(f: NodeFactory):
     # unary
@@ -520,11 +562,13 @@ class SynthRiddleGen1:
         min_depth: int = 2,
         max_depth: int = 5,
         max_input_sample_tries: int = 100,
+        min_examles: int = 4,
+        max_examles: int = 7,
         function_names: List[str] = None,
     ):
-
         assert min_depth > 0 and min_depth <= max_depth
         assert sample_node_count > min_depth
+        assert min_examles <= max_examles
 
         self.node_factory = node_factory
         self.input_sampler = input_sampler
@@ -532,6 +576,8 @@ class SynthRiddleGen1:
         self.min_depth = min_depth
         self.max_depth = max_depth
         self.max_input_sample_tries = max_input_sample_tries
+        self.min_examples = min_examles
+        self.max_examples = max_examles
         self.function_names = function_names
 
     @staticmethod
@@ -652,9 +698,12 @@ class SynthRiddleGen1:
         ]
 
         for node in candidates:
-            num_examples = random.randint(4, 7)  # at least 3 examples + 1 test
-            example_outputs = []
+            if self.max_examples > self.min_examples:
+                num_examples = random.randint(self.min_examples, self.max_examples)
+            else:
+                num_examples = self.min_examples
 
+            example_outputs = []
             try:
                 g2 = NodeGraph.from_ancestors(node)
                 trainig_examples = [
