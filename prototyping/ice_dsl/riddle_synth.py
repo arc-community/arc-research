@@ -94,7 +94,7 @@ def main():
     register_functions(f)
 
     if cfg.function_set is not None:
-        valid_function_names = set(f.functions)
+        valid_function_names = set(f.functions.keys())
         function_names = []
         for n in cfg.function_set:
             if type(n) is str:
@@ -103,7 +103,7 @@ def main():
                 else:
                     print(f"WARNING: Ignoring unknown function name '{n}'.")
     else:
-        function_names = f.functions
+        function_names = list(f.functions.keys())
 
     if cfg.exclude_functions is not None:
         function_names = list(set(function_names) - set(cfg.exclude_functions))

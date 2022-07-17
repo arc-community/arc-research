@@ -387,8 +387,6 @@ def register_functions(f: NodeFactory):
     f.register_unary("border", border)
     f.register_unary("center", center)
     f.register_unary("majority_color_image", majority_color_image)
-    f.register_unary("replace_colors", replace_colors)
-    f.register_unary("filter_color_palette", filter_color_palette)
 
     for i in range(1, 9):
         f.register_unary(f"rigid_{i}", partial(rigid, id=i))
@@ -430,6 +428,8 @@ def register_functions(f: NodeFactory):
     f.register_binary("repeat_1", partial(repeat, pad=1))
     f.register_binary("mirror_0", partial(mirror, pad=0))
     f.register_binary("mirror_1", partial(mirror, pad=1))
+    f.register_binary("filter_color_palette", filter_color_palette)
+    f.register_binary("replace_colors", replace_colors)
 
     # split
     f.register("cut_image", cut_image, return_type=ParameterType.ImageList, parameter_types=[ParameterType.Image])

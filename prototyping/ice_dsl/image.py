@@ -1072,6 +1072,8 @@ def smear(img: Image, id: int) -> Image:
 
     for dx, dy in d[id]:
         di = dy * w + dx
+        if di == 0:
+            continue
 
         for i in range(ret.h):
             step = 1 if i == 0 or i == ret.h - 1 else max(ret.w - 1, 1)
