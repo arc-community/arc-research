@@ -1,7 +1,7 @@
 from __future__ import annotations
 from abc import ABC, abstractmethod
 from enum import Enum
-from typing import Dict, List, Set, Tuple, Union
+from typing import Dict, List, Sequence, Set, Tuple, Union
 from arc.utils import dataset
 import random
 from functools import partial
@@ -378,9 +378,9 @@ def register_functions(f: NodeFactory):
     # unary
     for i in range(10):
         f.register_unary(f"filter_color_{i}", partial(filter_color, id=i))
-    for i in range(1,10):
+    for i in range(1, 10):
         f.register_unary(f"erase_color_{i}", partial(erase_color, col=i))
-    for i in range(1,10):
+    for i in range(1, 10):
         f.register_unary(f"color_shape_const_{i}", partial(color_shape_const, id=i))
 
     f.register_unary("compress", compress)
@@ -518,7 +518,19 @@ def print_image(img):
 
 
 class InputSampler:
-    def __init__(self, riddle_ids, include_outputs=True, include_test=True):
+    def __init__(
+        self,
+        riddle_ids: Sequence[int],
+        include_outputs: bool = True,
+        include_test: bool = True,
+        color_permutation: bool = False,
+        random_offsets: bool = False,
+        add_noise_p: float = 0,
+        noise_p: float = 0,
+        add_parts_p=1.0, 
+        parts_min=0, 
+        parts_max=2
+    ):
         self.riddle_ids = riddle_ids
         self.riddles = [dataset.load_riddle_from_id(id) for id in self.riddle_ids]
 
@@ -534,7 +546,29 @@ class InputSampler:
                 (r.riddle_id + f"_test{i}_in", t.input) for r in self.riddles for i, t in enumerate(r.test)
             ]
 
+        self.color_permutation = color_permutation
+        self.random_offsets = random_offsets
+        self.add_noise_p = add_noise_p
+        self.noise_p = noise_p
         self.order = list(range(len(self.boards)))
+
+        if add_parts_p > 0:
+            # extract parts
+            parts = []
+            self.next_index = 0
+            for i in range(len(riddle_ids)):
+                img = self.next_image()
+                for x in split_all(img):
+                    if x.w > 2 and x.h > 2 and x.w < img.w // 2 and x.h < img.h // 2:
+                        x.p = Point(0, 0)
+                        parts.append(x)
+            self.parts = parts
+
+        self.add_parts_p = add_parts_p
+        assert parts_min <= parts_max
+        self.parts_min = parts_min
+        self.parts_max = parts_max
+
         self.shuffle()
 
     def shuffle(self):
@@ -552,13 +586,47 @@ class InputSampler:
         board = self.next_board()
         return Image.from_board(board)
 
+    def __randomize_offsets(self, images: List[Image]) -> None:
+        max_w = max(i.w for i in images)
+        max_h = max(i.h for i in images)
+
+        for img in images:
+            if img.w < max_w:
+                img.x = random.randint(0, max_w - img.w)
+            if img.h < max_h:
+                img.y = random.randint(0, max_h - img.h)
+
+
     def next_augmented_image(self):
         image = self.next_image()
         image = rigid(image, random.randint(0, 8))
+        if self.color_permutation:
+            # use random mapping of colors 1-9
+            color_map = list(range(1, 10))
+            random.shuffle(color_map)
+            color_map = [0] + color_map
+            image.mask = [color_map[x] for x in image.mask]
+
+        if self.add_noise_p > 0:
+            if self.add_noise_p >= 1.0 or random.random() < self.add_noise_p:
+                for i in range(len(image.mask)):
+                    if self.noise_p >= 1.0 or random.random() < self.noise_p:
+                        image.mask[i] = random.randint(0, 9)
+
+        if self.add_parts_p > 0 and len(self.parts):
+            if self.add_parts_p >= 1.0 or random.random() <= self.add_parts_p:
+                composition = [image]
+                for i in range(random.randint(self.parts_min, self.parts_max)):
+                    part_to_add = random.choice(self.parts).copy()
+                    composition.append(part_to_add)
+                self.__randomize_offsets(composition)
+
         return image
 
     def next_composed_image(self, n=2):
         inputs = [self.next_augmented_image() for _ in range(n)]
+        if self.random_offsets:
+            self.__randomize_offsets(inputs)
         return compose_growing(inputs)
 
 

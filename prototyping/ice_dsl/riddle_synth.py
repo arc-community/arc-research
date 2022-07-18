@@ -22,6 +22,13 @@ class InputSamplerConfiguration:
     first_n: int = None
     include_outputs: bool = True
     include_test: bool = True
+    color_permutation: bool = False  # randomly map colors 1-9
+    random_offsets: bool = True  # use random offsets for smaller images when composing
+    add_noise_p: float = 0.0
+    noise_p: float = 0.0
+    add_parts_p: float = 0.0
+    parts_min: int = 0
+    parts_max: int = 2
 
 
 @dataclass
@@ -111,7 +118,7 @@ def main():
     function_names.sort()
     print(f"Number of functions: {len(function_names)}")
     if args.show_functions:
-        print(function_names)
+        print(json.dumps(function_names, indent=2))
 
     # load boards from public training set for InputSampler
     print("Loading boards")
@@ -119,7 +126,16 @@ def main():
     if cfg.input_sampler.first_n is not None and cfg.input_sampler.first_n > 0:
         eval_riddle_ids = eval_riddle_ids[: cfg.input_sampler.first_n]
     input_sampler = InputSampler(
-        eval_riddle_ids, include_outputs=cfg.input_sampler.include_outputs, include_test=cfg.input_sampler.include_test
+        eval_riddle_ids,
+        include_outputs=cfg.input_sampler.include_outputs,
+        include_test=cfg.input_sampler.include_test,
+        color_permutation=cfg.input_sampler.color_permutation,
+        random_offsets=cfg.input_sampler.random_offsets,
+        add_noise_p=cfg.input_sampler.add_noise_p,
+        noise_p=cfg.input_sampler.noise_p,
+        add_parts_p=cfg.input_sampler.add_parts_p,
+        parts_min=cfg.input_sampler.parts_min,
+        parts_max=cfg.input_sampler.parts_max,
     )
     print(f"Total boards: {len(input_sampler.boards)}")
 

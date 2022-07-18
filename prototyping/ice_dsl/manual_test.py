@@ -1,6 +1,7 @@
 import random
 from arc.utils import dataset
 from node_graph import FunctionNode, InputSampler, NodeFactory, print_image, register_functions
+from image import split_all
 
 
 def main():
@@ -10,13 +11,14 @@ def main():
     register_functions(f)
 
     eval_riddle_ids = dataset.get_riddle_ids(["training"])
-    eval_riddle_ids = eval_riddle_ids[:100]
-    input_sampler = InputSampler(eval_riddle_ids, include_outputs=True, include_test=True)
+    eval_riddle_ids = eval_riddle_ids[:200]
+    input_sampler = InputSampler(eval_riddle_ids, include_outputs=True, include_test=True, color_permutation=True, random_offsets=True, add_noise_p=0.0, noise_p=0.0, add_parts_p=0.0)
+
     print(f"Total boards: {len(input_sampler.boards)}")
 
     function_names = list(f.functions.keys())
 
-    def find_image_unary(n: FunctionNode):
+    def find_images(n: FunctionNode):
         for i in range(1000):
             num_inputs = len(n.input_nodes)
 
@@ -38,7 +40,7 @@ def main():
 
             return input_images, output_image
 
-        raise RuntimeError("no suitable input image found")
+        raise RuntimeError("no suitable input image(s) found")
 
 
     for i,function_name in enumerate(function_names):
@@ -46,7 +48,7 @@ def main():
         print(f"Function #{i}: {function_name}")
         if n.is_unary_image or n.is_binary_image:
 
-            input_images, output_image = find_image_unary(n)
+            input_images, output_image = find_images(n)
 
             for j,input_image in enumerate(input_images):
                 print(f"INPUT{j}:")
