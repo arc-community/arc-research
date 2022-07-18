@@ -1,0 +1,31 @@
+program: conv_sweep.py
+method: bayes
+project: arc_conv_sweep1
+metric:
+  goal: maximize
+  name: solved
+parameters:
+  lr:
+    values: [1e-2, 1e-3, 1e-4, 1e-5] 
+  max_steps:
+    values: [100, 500, 1000, 2500, 5000]
+  latent_dim:
+    values: [32, 64, 128, 256, 512, 1024]
+  hidden_dim:
+    values: [32, 64, 128, 256, 512, 1024]
+  dropout:
+    distribution: uniform
+    min: 0.0
+    max: 0.9
+  weight_decay:
+    distribution: uniform
+    min: 0.0
+    max: 0.5
+  num_layers:
+    distribution: int_uniform
+    min: 1
+    max: 5
+  normalize:
+    values: ['BatchNorm', 'InstanceNorm']
+  nonlinearity:
+    values: ['GELU', 'LeakyReLU', 'ReLU', 'Tanh']

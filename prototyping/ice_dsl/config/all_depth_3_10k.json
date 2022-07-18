@@ -1,0 +1,16 @@
+{
+    "seed": 1234567,
+    "num_riddles_to_generate": 10000,
+    "output_dir": "all_depth_3_10k",
+    "min_depth": 3,
+    "max_depth": 3,
+    "sample_node_count": 30,
+    "max_input_sample_tries": 250,
+    "min_examples": 4,
+    "max_examples": 4,
+    "input_sampler": {
+        "subdirs": [
+            "training"
+        ]
+    }
+}
