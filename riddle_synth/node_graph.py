@@ -527,9 +527,9 @@ class InputSampler:
         random_offsets: bool = False,
         add_noise_p: float = 0,
         noise_p: float = 0,
-        add_parts_p=1.0, 
-        parts_min=0, 
-        parts_max=2
+        add_parts_p=1.0,
+        parts_min=0,
+        parts_max=2,
     ):
         self.riddle_ids = riddle_ids
         self.riddles = [dataset.load_riddle_from_id(id) for id in self.riddle_ids]
@@ -595,7 +595,6 @@ class InputSampler:
                 img.x = random.randint(0, max_w - img.w)
             if img.h < max_h:
                 img.y = random.randint(0, max_h - img.h)
-
 
     def next_augmented_image(self):
         image = self.next_image()
