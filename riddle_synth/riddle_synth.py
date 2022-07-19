@@ -154,12 +154,14 @@ def main():
         shutil.copy(args.config, str(config_out_path))
 
     riddle_gen = SynthRiddleGen1(
-        f,
-        input_sampler,
+        node_factory=f,
+        input_sampler=input_sampler,
         sample_node_count=cfg.sample_node_count,
         min_depth=cfg.min_depth,
         max_depth=cfg.max_depth,
         max_input_sample_tries=cfg.max_input_sample_tries,
+        min_examples=cfg.min_examples,
+        max_examples=cfg.max_examples,
         function_names=function_names,
     )
 

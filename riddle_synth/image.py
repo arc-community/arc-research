@@ -89,7 +89,7 @@ class Point:
 class Image:
     @staticmethod
     def from_board(board: Board) -> Image:
-        return Image(Point(), Point(board.num_rows, board.num_cols), board.flat)
+        return Image(Point(), Point(board.num_cols, board.num_rows), board.flat)
 
     @overload
     def __init__(self, p: Point, sz: Point, mask: Iterable[int]):

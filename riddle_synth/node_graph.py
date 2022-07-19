@@ -638,13 +638,13 @@ class SynthRiddleGen1:
         min_depth: int = 2,
         max_depth: int = 5,
         max_input_sample_tries: int = 100,
-        min_examles: int = 4,
-        max_examles: int = 7,
+        min_examples: int = 4,
+        max_examples: int = 7,
         function_names: List[str] = None,
     ):
         assert min_depth > 0 and min_depth <= max_depth
         assert sample_node_count > min_depth
-        assert min_examles <= max_examles
+        assert min_examples <= max_examples
 
         self.node_factory = node_factory
         self.input_sampler = input_sampler
@@ -652,8 +652,8 @@ class SynthRiddleGen1:
         self.min_depth = min_depth
         self.max_depth = max_depth
         self.max_input_sample_tries = max_input_sample_tries
-        self.min_examples = min_examles
-        self.max_examples = max_examles
+        self.min_examples = min_examples
+        self.max_examples = max_examples
         self.function_names = function_names
 
     @staticmethod
