@@ -1183,53 +1183,6 @@ def extend(img: Image, room: Image) -> Image:
     return ret
 
 
-def pick_max_internal(v: List[Image], f: Callable[[Image], int]) -> Image:
-    if len(v) == 0:
-        return badImg
-    return max(v, key=f)
-
-
-def max_criterion(img: Image, id: int) -> int:
-    assert id >= 0 and id < 14
-
-    if id == 0:
-        return count_nonzero(img)
-    elif id == 1:
-        return -count_nonzero(img)
-    elif id == 2:
-        return img.w * img.h
-    elif id == 3:
-        return -img.w * img.h
-    elif id == 4:
-        return count_colors(img)
-    elif id == 5:
-        return -img.p.y
-    elif id == 6:
-        return img.p.y
-    elif id == 7:
-        return count_components(img)
-    elif id == 8:
-        comp = compress(img)
-        return comp.w * comp.h - count_nonzero(comp)
-    elif id == 9:
-        comp = compress(img)
-        return -(comp.w * comp.h - count_nonzero(comp))
-    elif id == 10:
-        return count_nonzero(interior(img))
-    elif id == 11:
-        return -count_nonzero(interior(img))
-    elif id == 12:
-        return -img.p.x
-    elif id == 13:
-        return img.p.x
-
-    return -1
-
-
-def pick_max(v: List[Image], id: int) -> Image:
-    return pick_max_internal(v, lambda img: max_criterion(img, id))
-
-
 def cut(img: Image, a: Image) -> List[Image]:
     ret = []
     done = empty(img.p, img.sz)
@@ -1509,6 +1462,43 @@ def cut_index(a: Image, b: Image, ind: int) -> Image:
     return v[ind]
 
 
+def max_criterion(img: Image, id: int) -> int:
+    assert id >= 0 and id < 14
+
+    if id == 0:
+        return count_nonzero(img)
+    elif id == 1:
+        return -count_nonzero(img)
+    elif id == 2:
+        return img.w * img.h
+    elif id == 3:
+        return -img.w * img.h
+    elif id == 4:
+        return count_colors(img)
+    elif id == 5:
+        return -img.p.y
+    elif id == 6:
+        return img.p.y
+    elif id == 7:
+        return count_components(img)
+    elif id == 8:
+        comp = compress(img)
+        return comp.w * comp.h - count_nonzero(comp)
+    elif id == 9:
+        comp = compress(img)
+        return -(comp.w * comp.h - count_nonzero(comp))
+    elif id == 10:
+        return count_nonzero(interior(img))
+    elif id == 11:
+        return -count_nonzero(interior(img))
+    elif id == 12:
+        return -img.p.x
+    elif id == 13:
+        return img.p.x
+
+    return -1
+
+
 def pick_maxes_internal(v: List[Image], f, invert: bool = False) -> List[Image]:
     n = len(v)
     if n == 0:
@@ -1529,6 +1519,17 @@ def pick_maxes(v: List[Image], id: int) -> List[Image]:
 
 def pick_not_maxes(v: List[Image], id: int) -> List[Image]:
     return pick_maxes_internal(v, lambda img: max_criterion(img, id), True)
+
+
+def pick_max_internal(v: List[Image], f: Callable[[Image], int]) -> Image:
+    xs = pick_maxes_internal(v, f, False)
+    if len(xs) != 1:
+        return badImg  # non unique maximum value (or empty list)
+    return xs[0]
+
+
+def pick_max(v: List[Image], id: int) -> Image:
+    return pick_max_internal(v, lambda img: max_criterion(img, id))
 
 
 def split_all(img: Image) -> List[Image]:
