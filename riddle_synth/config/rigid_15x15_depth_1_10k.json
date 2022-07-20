@@ -1,0 +1,27 @@
+{
+    "seed": 42,
+    "num_riddles_to_generate": 10000,
+    "output_dir": "rigid_15x15_depth_1_10k",
+    "function_set": [
+        "rigid_1",
+        "rigid_2",
+        "rigid_3",
+        "rigid_4",
+        "rigid_5",
+        "rigid_6",
+        "rigid_7",
+        "rigid_8"
+    ],
+    "min_depth": 1,
+    "max_depth": 1,
+    "min_examples": 4,
+    "max_examples": 4,
+    "input_sampler": {
+        "subdirs": [
+            "training",
+            "evaluation"
+        ],
+        "max_width": 15,
+        "max_height": 15
+    }
+}

@@ -6,6 +6,8 @@ from arc.utils import dataset
 import random
 from functools import partial
 
+from numpy import imag
+
 from image import (
     Point,
     Image,
@@ -18,6 +20,7 @@ from image import (
     count,
     cut_image,
     embed,
+    empty,
     erase_color,
     filter_color,
     filter_color_palette,
@@ -53,6 +56,7 @@ from image import (
     interior2,
     rigid,
     get_regular,
+    sub_image,
     to_origin,
     wrap,
     extend,
@@ -527,9 +531,13 @@ class InputSampler:
         random_offsets: bool = False,
         add_noise_p: float = 0,
         noise_p: float = 0,
-        add_parts_p=1.0,
-        parts_min=0,
-        parts_max=2,
+        add_parts_p: float = 1.0,
+        parts_min: int = 0,
+        parts_max: int = 2,
+        min_width: int = None,
+        min_height: int = None,
+        max_width: int = None,
+        max_height: int = None,
     ):
         self.riddle_ids = riddle_ids
         self.riddles = [dataset.load_riddle_from_id(id) for id in self.riddle_ids]
@@ -569,6 +577,11 @@ class InputSampler:
         self.parts_min = parts_min
         self.parts_max = parts_max
 
+        self.min_width = min_width
+        self.min_height = min_height
+        self.max_width = max_width
+        self.max_height = max_height
+
         self.shuffle()
 
     def shuffle(self):
@@ -599,6 +612,25 @@ class InputSampler:
     def next_augmented_image(self):
         image = self.next_image()
         image = rigid(image, random.randint(0, 8))
+
+        if self.min_height and self.min_height > image.h or self.min_width and self.min_width > image.w:
+            # expand canvas
+            sz = image.sz.copy()
+            if self.min_height:
+                sz.y = max(image.h, self.min_height)
+            if self.min_width:
+                sz.x = max(image.w, self.min_width)
+            image = compose(empty(sz), image, 0)
+
+        if self.max_height and self.max_height < image.h or self.max_width and self.max_width < image.w:
+            # crop
+            sz = image.sz.copy()
+            if self.max_height:
+                sz.y = min(image.h, self.max_height)
+            if self.max_width:
+                sz.x = min(image.w, self.max_width)
+            image = sub_image(image, Point(), sz)
+
         if self.color_permutation:
             # use random mapping of colors 1-9
             color_map = list(range(1, 10))

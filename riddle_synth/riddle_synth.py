@@ -29,6 +29,10 @@ class InputSamplerConfiguration:
     add_parts_p: float = 0.0
     parts_min: int = 0
     parts_max: int = 2
+    min_width: int = 0
+    min_height: int = 0
+    max_width: int = None
+    max_height: int = None
 
 
 @dataclass
@@ -136,6 +140,10 @@ def main():
         add_parts_p=cfg.input_sampler.add_parts_p,
         parts_min=cfg.input_sampler.parts_min,
         parts_max=cfg.input_sampler.parts_max,
+        min_width=cfg.input_sampler.min_width,
+        min_height=cfg.input_sampler.min_height,
+        max_width=cfg.input_sampler.max_width,
+        max_height=cfg.input_sampler.max_height,
     )
     print(f"Total boards: {len(input_sampler.boards)}")
 
