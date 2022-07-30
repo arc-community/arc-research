@@ -22,18 +22,17 @@ from warmup_scheduler import GradualWarmupScheduler
 
 
 class RiddleLoader:
-    def __init__(self, dir_path: str, function_list: List[str]):
-        self.dir_path = Path(dir_path)
+    def __init__(self, file_names: List[Path], function_list: List[str]):
         self.function_list = function_list
         self.function_index = {function_list[i]: i for i in range(len(function_list))}
 
-        self.file_names = list(self.dir_path.glob("*.json"))
+        self.file_names = file_names
         if len(self.file_names) == 0:
             raise RuntimeError("No riddles found.")
         self.order = list(range(len(self.file_names)))
         self.shuffle()
 
-    def shuffle(self):
+    def shuffle(self) -> None:
         random.shuffle(self.order)
         self.next_index = 0
 
@@ -53,7 +52,7 @@ class RiddleLoader:
 
         return r, function_names
 
-    def load_batch(self, batch_size: int, device: torch.DeviceObjType):
+    def load_batch(self, batch_size: int, device: torch.DeviceObjType) -> Tuple:
         riddles = [self.next_riddle() for i in range(batch_size)]
 
         # find max sizes and training example count
@@ -139,12 +138,12 @@ class InferFunc(nn.Module):
     def __init__(
         self,
         *,
-        num_functions=10,
-        dim=256,
-        depth=1,
-        num_latents=128,
-        latent_dim=512,
-        max_train_examples=8,
+        num_functions: int = 10,
+        dim: int = 256,
+        depth: int = 1,
+        num_latents: int = 128,
+        latent_dim: int = 512,
+        max_train_examples: int = 8,
     ):
         super().__init__()
 
@@ -177,7 +176,15 @@ class InferFunc(nn.Module):
             decoder_ff=False,
         )
 
-    def forward(self, inputs, mask, io_type, train_example_index, pos_x, pos_y):
+    def forward(
+        self,
+        inputs: torch.Tensor,
+        mask: torch.Tensor,
+        io_type: torch.Tensor,
+        train_example_index: torch.Tensor,
+        pos_x: torch.Tensor,
+        pos_y: torch.Tensor,
+    ) -> torch.Tensor:
         x = self.token_emb(inputs)
         x = x + self.io_type_emb(io_type)
         x = x + self.train_example_index_emb(train_example_index)
@@ -190,7 +197,7 @@ class InferFunc(nn.Module):
         return x
 
 
-def parse_args():
+def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
     parser.add_argument("--device", default="cuda", type=str, help="device to use")
     parser.add_argument("--device_index", default=0, type=int, help="device index")
@@ -213,6 +220,8 @@ def parse_args():
     parser.add_argument("--num_latents", default=128, type=int)
     parser.add_argument("--latent_dim", default=512, type=int)
     parser.add_argument("--max_train_examples", default=8, type=int)
+    parser.add_argument("--eval_interval", default=1000, type=int)
+    parser.add_argument("--num_eval_batches", default=32, type=int)
 
     # train_riddle_folder = '/data/synth_riddles/rigid_and_half/rigid_and_half_depth_1_10k/'
     train_riddle_folder = (
@@ -234,7 +243,7 @@ def parse_args():
     return parser.parse_args()
 
 
-def load_function_names(riddle_folder):
+def load_function_names(riddle_folder: str):
     config_folder_path = Path(riddle_folder) / "config"
     for p in config_folder_path.glob("*.json"):
         with p.open("r") as f:
@@ -244,7 +253,7 @@ def load_function_names(riddle_folder):
     raise RuntimeError("No configuration with function_set found.")
 
 
-def count_parameters(module):
+def count_parameters(module: nn.Module):
     return sum(p.data.nelement() for p in module.parameters())
 
 
@@ -254,6 +263,36 @@ def grad_norm(model_params):
     for p in model_params:
         sqsum += (p.grad**2).sum().item()
     return math.sqrt(sqsum)
+
+
+@torch.no_grad()
+def eval_model(
+    device: torch.DeviceObjType,
+    batch_size: int,
+    num_batches: int,
+    model: InferFunc,
+    riddle_loader: RiddleLoader,
+    loss_fn,
+) -> float:
+    model.eval()
+
+    total_loss = 0
+    for i in range(num_batches):
+        (
+            inputs,
+            mask,
+            io_type,
+            train_example_index,
+            pos_x,
+            pos_y,
+            targets,
+            targets_list,
+        ) = riddle_loader.load_batch(batch_size, device)
+        y = model.forward(inputs, mask, io_type, train_example_index, pos_x, pos_y)
+        loss = loss_fn(y, targets)
+        total_loss += loss.item()
+
+    return total_loss / num_batches
 
 
 def main():
@@ -311,10 +350,28 @@ def main():
     )
 
     loss_fn = nn.MultiLabelSoftMarginLoss(reduction="mean")
-    riddle_loader = RiddleLoader(args.riddle_folder, function_list=fn_list)
+    file_names = list(Path(args.riddle_folder).glob("*.json"))
+    random.shuffle(file_names)
+
+    num_train_riddles = len(file_names) * 80 // 100
+    eval_file_names = file_names[num_train_riddles:]
+    train_file_names = file_names[:num_train_riddles]
+    print(f"Num train riddles: {len(train_file_names)}")
+    print(f"Num eval riddles: {len(eval_file_names)}")
+
+    riddle_loader_train = RiddleLoader(file_names=train_file_names, function_list=fn_list)
+    riddle_loader_eval = RiddleLoader(file_names=eval_file_names, function_list=fn_list)
 
     checkpoint_interval = args.checkpoint_interval
     for step in range(1, max_steps + 1):
+
+        if step % args.eval_interval == 0:
+            eval_loss = eval_model(device, batch_size, args.num_eval_batches, model, riddle_loader_eval, loss_fn)
+            print(
+                f"step: {step}; eval loss: {eval_loss:.4e};"
+            )
+            wandb.log({"eval.loss": eval_loss}, step=step)
+
         model.train()
         optimizer.zero_grad()
 
@@ -327,7 +384,7 @@ def main():
             pos_y,
             targets,
             targets_list,
-        ) = riddle_loader.load_batch(batch_size, device)
+        ) = riddle_loader_train.load_batch(batch_size, device)
         y = model.forward(inputs, mask, io_type, train_example_index, pos_x, pos_y)
         loss = loss_fn(y, targets)
 
@@ -338,11 +395,16 @@ def main():
 
         if step % 10 == 0:
             print(
-                f"step: {step}: Loss: {loss.item():.4f}; lr: {lr_scheduler.get_last_lr()[0]:.3e}; grad_norm: {gn:.3e}"
+                f"step: {step}; train loss: {loss.item():.4e}; lr: {lr_scheduler.get_last_lr()[0]:.3e}; grad_norm: {gn:.3e}"
             )
 
         wandb.log(
-            {"loss": loss.item(), "lr": lr_scheduler.get_last_lr()[0], "grad_norm": gn}
+            {
+                "train.loss": loss.item(),
+                "train.lr": lr_scheduler.get_last_lr()[0],
+                "train.grad_norm": gn,
+            },
+            step=step,
         )
 
         if step % checkpoint_interval == 0:
