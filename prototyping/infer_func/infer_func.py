@@ -266,6 +266,13 @@ def grad_norm(model_params):
 
 
 @torch.no_grad()
+def multi_label_accuracy(y, targets, threshold=0.5):
+    y = torch.sigmoid(y) > threshold
+    matching = y & targets
+    return torch.mean(matching.sum(dim=-1) / targets.sum(dim=-1))
+
+
+@torch.no_grad()
 def eval_model(
     device: torch.DeviceObjType,
     batch_size: int,
@@ -277,6 +284,7 @@ def eval_model(
     model.eval()
 
     total_loss = 0
+    total_acc = 0
     for i in range(num_batches):
         (
             inputs,
@@ -291,8 +299,10 @@ def eval_model(
         y = model.forward(inputs, mask, io_type, train_example_index, pos_x, pos_y)
         loss = loss_fn(y, targets)
         total_loss += loss.item()
+        acc = multi_label_accuracy(y, targets)
+        total_acc += acc.item()
 
-    return total_loss / num_batches
+    return total_loss / num_batches, total_acc / num_batches
 
 
 def main():
@@ -359,18 +369,27 @@ def main():
     print(f"Num train riddles: {len(train_file_names)}")
     print(f"Num eval riddles: {len(eval_file_names)}")
 
-    riddle_loader_train = RiddleLoader(file_names=train_file_names, function_list=fn_list)
+    riddle_loader_train = RiddleLoader(
+        file_names=train_file_names, function_list=fn_list
+    )
     riddle_loader_eval = RiddleLoader(file_names=eval_file_names, function_list=fn_list)
 
     checkpoint_interval = args.checkpoint_interval
     for step in range(1, max_steps + 1):
 
         if step % args.eval_interval == 0:
-            eval_loss = eval_model(device, batch_size, args.num_eval_batches, model, riddle_loader_eval, loss_fn)
-            print(
-                f"step: {step}; eval loss: {eval_loss:.4e};"
+            eval_loss, eval_acc = eval_model(
+                device,
+                batch_size,
+                args.num_eval_batches,
+                model,
+                riddle_loader_eval,
+                loss_fn,
             )
-            wandb.log({"eval.loss": eval_loss}, step=step)
+            print(
+                f"step: {step}; eval loss: {eval_loss:.4e}; eval accuracy: {eval_acc:.2%}"
+            )
+            wandb.log({"eval.loss": eval_loss, "eval.accuracy": eval_acc}, step=step)
 
         model.train()
         optimizer.zero_grad()
@@ -387,6 +406,7 @@ def main():
         ) = riddle_loader_train.load_batch(batch_size, device)
         y = model.forward(inputs, mask, io_type, train_example_index, pos_x, pos_y)
         loss = loss_fn(y, targets)
+        acc = multi_label_accuracy(y, targets)
 
         loss.backward()
         gn = grad_norm(model.parameters())
@@ -395,12 +415,13 @@ def main():
 
         if step % 10 == 0:
             print(
-                f"step: {step}; train loss: {loss.item():.4e}; lr: {lr_scheduler.get_last_lr()[0]:.3e}; grad_norm: {gn:.3e}"
+                f"step: {step}; train loss: {loss.item():.4e}; train accuracy: {acc.item():.2%} lr: {lr_scheduler.get_last_lr()[0]:.3e}; grad_norm: {gn:.3e}"
             )
 
         wandb.log(
             {
                 "train.loss": loss.item(),
+                "train.accuracy": acc.item(),
                 "train.lr": lr_scheduler.get_last_lr()[0],
                 "train.grad_norm": gn,
             },
