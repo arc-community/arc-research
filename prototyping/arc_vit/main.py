@@ -1,8 +1,9 @@
 from typing import List, Set, Tuple
 import math
-import argparse
 import random
 import uuid
+import argparse
+from pathlib import Path
 from tqdm import tqdm
 
 import torch
@@ -10,22 +11,19 @@ import torch.nn as nn
 import torch.optim as optim
 import torchvision
 
-from vit import ViT_NoEmbed
-
-from pathlib import Path
+import wandb
 
 from arc.interface import Riddle
 from arc.utils.dataset import load_riddle_from_file
 
-import wandb
-
+from vit import ViT_NoEmbed
 from warmup_scheduler import GradualWarmupScheduler
 
 
 class RiddleLoader:
     colors_tables = {
-        "arc_game":
-        # color valuess taken from ARC game https://volotat.github.io/ARC-Game/
+        "official":
+        # color values from fchollet's ARC repository https://github.com/fchollet/ARC/blob/b69465a8d1e628909ac58785583e9f41eda2cc51/apps/css/common.css#L14-L43
         [
             0x0,
             0x0074D9,
@@ -132,6 +130,17 @@ class RiddleLoader:
 
 
 def parse_args() -> argparse.Namespace:
+    # parse bool args correctly, see https://stackoverflow.com/a/43357954
+    def str2bool(v):
+        if isinstance(v, bool):
+            return v
+        if v.lower() in ("yes", "true", "t", "y", "1"):
+            return True
+        elif v.lower() in ("no", "false", "f", "n", "0"):
+            return False
+        else:
+            raise argparse.ArgumentTypeError("Boolean value expected.")
+
     parser = argparse.ArgumentParser()
     parser.add_argument("--device", default="cuda", type=str, help="device to use")
     parser.add_argument("--device_index", default=0, type=int, help="device index")
@@ -171,6 +180,8 @@ def parse_args() -> argparse.Namespace:
     )
 
     parser.add_argument("--color_table", default="mokole", type=str)
+
+    parser.add_argument("--save_eval_images", default=True, type=str2bool)
 
     return parser.parse_args()
 
@@ -212,11 +223,7 @@ def eval_model(
     total_accuracy = 0
     for i in range(num_batches):
         inputs, targets, target_boards = riddle_loader.load_batch(batch_size, device)
-        (
-            b,
-            n,
-            *_,
-        ) = inputs.shape
+        b, n, *_ = inputs.shape
         inputs = inputs.view(b, n, -1)
         targets = targets.view(b, -1)
 
@@ -230,6 +237,42 @@ def eval_model(
         total_accuracy += accuracy.item()
 
     return total_loss / num_batches, total_accuracy / num_batches
+
+
+@torch.no_grad()
+def eval_model_visual(
+    device: torch.DeviceObjType, batch_size: int, model, riddle_loader: RiddleLoader
+) -> Tuple[float, float]:
+    model.eval()
+
+    inputs, targets, target_boards = riddle_loader.load_batch(batch_size, device)
+
+    b, n, c, h, w = inputs.shape
+    y = model(inputs.view(b, n, -1))
+
+    # create error view
+    error_view = torch.zeros(b, c, h, w, device=device)
+    t = quantize_output(y, riddle_loader.color_mapping)
+    error_view[:, 1] = (t == target_boards).float()  # correct pixels = green
+    error_view[:, 0] = (t != target_boards).float()  # incorrect pixels = red
+
+    # combine: examples, ground-truth, model ouput, error view
+    combined = torch.cat(
+        (
+            inputs,
+            targets.unsqueeze(1),
+            y.view(targets.shape).unsqueeze(1),
+            error_view.unsqueeze(1),
+        ),
+        dim=1,
+    )
+    num_per_riddle = combined.shape[1]
+
+    riddle_grid = torchvision.utils.make_grid(
+        combined.view(-1, 3, 10, 10), nrow=num_per_riddle, padding=2, normalize=False, value_range=(0, 1)
+    )
+
+    return riddle_grid
 
 
 def main():
@@ -331,13 +374,19 @@ def main():
                 loss_fn,
             )
             print(f"step: {step}; eval loss: {eval_loss:.4e}; eval accuracy: {eval_accuracy:.2%};")
-            wandb.log({"eval.loss": eval_loss, "eval.accuracy": eval_accuracy}, step=step)
+
+            eval_grid = eval_model_visual(device, 32, model, riddle_loader_eval)
+            if args.save_eval_images:
+                torchvision.utils.save_image(eval_grid, f"{experiment_name}_eval_{step:08d}.png")
+            eval_image = wandb.Image(eval_grid, caption="input, GT, prediction, error")
+
+            wandb.log({"eval.loss": eval_loss, "eval.accuracy": eval_accuracy, "eval.image": eval_image}, step=step)
 
         model.train()
         optimizer.zero_grad()
 
         batch, targets, target_boards = rl.load_batch(batch_size, device)
-        b, n, _, _, _ = batch.shape
+        b, n, *_ = batch.shape
         batch = batch.view(b, n, -1)
         target = targets.view(b, -1)
 
