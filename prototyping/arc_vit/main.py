@@ -1,10 +1,9 @@
-import math
-from turtle import color
 from typing import List, Set, Tuple
-
+import math
 import argparse
 import random
 import uuid
+from tqdm import tqdm
 
 import torch
 import torch.nn as nn
@@ -24,12 +23,59 @@ from warmup_scheduler import GradualWarmupScheduler
 
 
 class RiddleLoader:
-    def __init__(self, file_names: List[Path]):
+    colors_tables = {
+        "arc_game":
+        # color valuess taken from ARC game https://volotat.github.io/ARC-Game/
+        [
+            0x0,
+            0x0074D9,
+            0xFF4136,
+            0x2ECC40,
+            0xFFDC00,
+            0xAAAAAA,
+            0xF012BE,
+            0xFF851B,
+            0x7FDBFF,
+            0x870C25,
+        ],
+        "mokole":
+        # palette generated with https://mokole.com/palette.html
+        [
+            0x0,  # black
+            0x006400,  # darkgreen
+            0xFF0000,  # red
+            0xFFD700,  # gold
+            0x00FF00,  # lime
+            0xE9967A,  # darksalmon
+            0x00FFFF,  # aqua
+            0x0000FF,  # blue
+            0x6495ED,  # cornflower
+            0xFF1493,  # deeppink
+        ],
+    }
+
+    def __init__(self, file_names: List[Path], colors_table_name: str):
         self.file_names = file_names
         if len(self.file_names) == 0:
             raise RuntimeError("No riddles found.")
         self.order = list(range(len(self.file_names)))
         self.shuffle()
+
+        if not colors_table_name in RiddleLoader.colors_tables:
+            raise RuntimeError(f"Unspported color map '{colors_table_name}' specified.")
+
+        color_table = RiddleLoader.colors_tables[colors_table_name]
+
+        color_mapping = nn.Embedding(10, 3)
+        for i, hex_color in enumerate(color_table):
+            r = hex_color & 0xFF
+            g = (hex_color >> 8) & 0xFF
+            b = (hex_color >> 16) & 0xFF
+
+            color_mapping.weight.data[i, 0] = r / 255.0
+            color_mapping.weight.data[i, 1] = g / 255.0
+            color_mapping.weight.data[i, 2] = b / 255.0
+        self.color_mapping = color_mapping
 
     def shuffle(self) -> None:
         random.shuffle(self.order)
@@ -43,50 +89,16 @@ class RiddleLoader:
         r = load_riddle_from_file(fn)
         return r
 
-    def load_batch(self, batch_size: int, device: torch.DeviceObjType) -> Tuple:
+    def load_batch(
+        self, batch_size: int, device: torch.DeviceObjType
+    ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         riddles = [self.next_riddle() for i in range(batch_size)]
         max_train_examples = max(len(r.train) for r in riddles)
 
-        # color valuess taken from ARC game https://volotat.github.io/ARC-Game/
-        # color_table = [
-        #     0x0,
-        #     0x0074D9,
-        #     0xFF4136,
-        #     0x2ECC40,
-        #     0xFFDC00,
-        #     0xAAAAAA,
-        #     0xF012BE,
-        #     0xFF851B,
-        #     0x7FDBFF,
-        #     0x870C25,
-        # ]
-
-        # # palette generated with https://mokole.com/palette.html
-        color_table = [
-            0x0, # black
-            0x006400, # darkgreen
-            0xff0000, # red
-            0xffd700, # gold
-            0x00ff00, # lime
-            0xe9967a, # darksalmon
-            0x00ffff, # aqua
-            0x0000ff, # blue
-            0x6495ed, # cornflower
-            0xff1493, # deeppink
-        ]
-
-        color_mapping = nn.Embedding(10, 3)
-        for i, hex_color in enumerate(color_table):
-            r = hex_color & 0xFF
-            g = (hex_color >> 8) & 0xFF
-            b = (hex_color >> 16) & 0xFF
-
-            color_mapping.weight.data[i, 0] = r / 255.0
-            color_mapping.weight.data[i, 1] = g / 255.0
-            color_mapping.weight.data[i, 2] = b / 255.0
-
         inputs = torch.zeros(batch_size, max_train_examples * 2 + 1, 3, 10, 10)  # train input+output = 2 + 1 test input
         targets = torch.zeros(batch_size, 3, 10, 10)
+        target_boards = torch.zeros(batch_size, 10, 10, dtype=torch.long)
+        color_mapping = self.color_mapping
 
         # convert board to tensor and map colors
         for i, r in enumerate(riddles):
@@ -106,17 +118,17 @@ class RiddleLoader:
                 # add output board
                 output_board = torch.from_numpy(t.output.np)
                 inputs[i, j * 2 + 1] = color_mapping(output_board).permute(2, 0, 1)
-            
+
             # add test input
             test_input_board = torch.from_numpy(test_pair.input.np)
             inputs[i, len(r.train) * 2] = color_mapping(test_input_board).permute(2, 0, 1)
 
             test_output_board = torch.from_numpy(test_pair.output.np)
+            target_boards[i] = test_output_board
             targets[i] = color_mapping(test_output_board).permute(2, 0, 1)
 
-        inputs = inputs.to(device)
-        targets = targets.to(device)
-        return inputs, targets
+        inputs, targets, target_boards = (x.to(device) for x in (inputs, targets, target_boards))
+        return inputs, targets, target_boards
 
 
 def parse_args() -> argparse.Namespace:
@@ -142,7 +154,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--heads", default=16, type=int)
     parser.add_argument("--mlp_dim", default=4096, type=int)
 
-    parser.add_argument("--eval_interval", default=1000, type=int)
+    parser.add_argument("--eval_interval", default=500, type=int)
     parser.add_argument("--num_eval_batches", default=32, type=int)
 
     train_riddle_folder = "/data/synth_riddles/unary/unary_depth_2_10k_10x10"
@@ -158,6 +170,8 @@ def parse_args() -> argparse.Namespace:
         help="wandb experiment name",
     )
 
+    parser.add_argument("--color_table", default="mokole", type=str)
+
     return parser.parse_args()
 
 
@@ -170,6 +184,20 @@ def grad_norm(model_params):
 
 
 @torch.no_grad()
+def quantize_output(y: torch.Tensor, color_mapping: nn.Embedding) -> torch.Tensor:
+    batch_size = y.shape[0]
+    y_flat = y.view(batch_size, 3, 10 * 10).permute(0, 2, 1)
+
+    # calculate distances
+    embedding = color_mapping.weight.to(y.device)
+    distances_squared = (y_flat.unsqueeze(-1) - embedding.t().unsqueeze(0)).pow(2).sum(dim=-2)
+
+    # encoding
+    indices = torch.argmin(distances_squared, dim=-1).view(batch_size, 10, 10)
+    return indices
+
+
+@torch.no_grad()
 def eval_model(
     device: torch.DeviceObjType,
     batch_size: int,
@@ -177,21 +205,31 @@ def eval_model(
     model,
     riddle_loader: RiddleLoader,
     loss_fn,
-) -> float:
+) -> Tuple[float, float]:
     model.eval()
 
     total_loss = 0
+    total_accuracy = 0
     for i in range(num_batches):
-        inputs, targets = riddle_loader.load_batch(batch_size, device)
-        b, n, _, _, _ = inputs.shape
+        inputs, targets, target_boards = riddle_loader.load_batch(batch_size, device)
+        (
+            b,
+            n,
+            *_,
+        ) = inputs.shape
         inputs = inputs.view(b, n, -1)
         targets = targets.view(b, -1)
 
-        y = model.forward(inputs)
+        y = model(inputs)
+
         loss = loss_fn(y, targets)
         total_loss += loss.item()
 
-    return total_loss / num_batches
+        t = quantize_output(y, riddle_loader.color_mapping)
+        accuracy = (t == target_boards).sum() / t.numel()
+        total_accuracy += accuracy.item()
+
+    return total_loss / num_batches, total_accuracy / num_batches
 
 
 def main():
@@ -212,14 +250,12 @@ def main():
     device = torch.device(args.device, args.device_index)
     file_names = list(Path(args.riddle_folder).expanduser().glob("*.json"))
 
-    print("filtering riddles")
-
-    # max_trainig_examples = 128
-    max_trainig_examples = -1
-
     # go over dataset and select all 10x10 riddles with equal input & output size and 3 training examples
     training_set = []
-    for fn in file_names:
+
+    print("filtering 10x10 riddles")
+    max_trainig_examples = -1  # 128  # for dev only
+    for fn in tqdm(file_names):
         r = load_riddle_from_file(fn)
         if all(
             bp.input.num_cols == 10
@@ -246,9 +282,9 @@ def main():
 
     loss_fn = nn.MSELoss()
 
-    rl = RiddleLoader(train_file_names)
-    riddle_loader_eval = RiddleLoader(file_names=eval_file_names)
-    batch, targets = rl.load_batch(1, device)
+    rl = RiddleLoader(file_names=train_file_names, colors_table_name=args.color_table)
+    riddle_loader_eval = RiddleLoader(file_names=eval_file_names, colors_table_name=args.color_table)
+    batch, targets, _ = rl.load_batch(1, device)
 
     num_patches = batch.shape[1]
     patch_dim = batch.shape[2] * batch.shape[3] * batch.shape[4]
@@ -286,7 +322,7 @@ def main():
     checkpoint_interval = args.checkpoint_interval
     for step in range(1, max_steps + 1):
         if step % args.eval_interval == 0:
-            eval_loss = eval_model(
+            eval_loss, eval_accuracy = eval_model(
                 device,
                 batch_size,
                 args.num_eval_batches,
@@ -294,20 +330,18 @@ def main():
                 riddle_loader_eval,
                 loss_fn,
             )
-            print(
-                f"step: {step}; eval loss: {eval_loss:.4e};"
-            )
-            wandb.log({"eval.loss": eval_loss}, step=step)
+            print(f"step: {step}; eval loss: {eval_loss:.4e}; eval accuracy: {eval_accuracy:.2%};")
+            wandb.log({"eval.loss": eval_loss, "eval.accuracy": eval_accuracy}, step=step)
 
         model.train()
         optimizer.zero_grad()
 
-        batch, targets = rl.load_batch(batch_size, device)
+        batch, targets, target_boards = rl.load_batch(batch_size, device)
         b, n, _, _, _ = batch.shape
         batch = batch.view(b, n, -1)
         target = targets.view(b, -1)
-        
-        y = model.forward(batch)
+
+        y = model(batch)
         loss = loss_fn(y, target)
 
         loss.backward()
@@ -315,14 +349,18 @@ def main():
         optimizer.step()
         lr_scheduler.step()
 
+        t = quantize_output(y, rl.color_mapping)
+        train_accuracy = (t == target_boards).sum() / t.numel()
+
         if step % 10 == 0:
             print(
-                f"step: {step}; train loss: {loss.item():.4e}; lr: {lr_scheduler.get_last_lr()[0]:.3e}; grad_norm: {gn:.3e}"
+                f"step: {step}; train loss: {loss.item():.4e}; train accuracy: {train_accuracy.item():.2%} lr: {lr_scheduler.get_last_lr()[0]:.3e}; grad_norm: {gn:.3e}"
             )
 
         wandb.log(
             {
                 "train.loss": loss.item(),
+                "train.accuracy": train_accuracy.item(),
                 "train.lr": lr_scheduler.get_last_lr()[0],
                 "train.grad_norm": gn,
             },
@@ -345,7 +383,6 @@ def main():
                 },
                 fn,
             )
-
 
 
 if __name__ == "__main__":
