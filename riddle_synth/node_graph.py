@@ -649,8 +649,11 @@ class InputSampler:
                 composition = [image]
                 for i in range(random.randint(self.parts_min, self.parts_max)):
                     part_to_add = random.choice(self.parts).copy()
-                    composition.append(part_to_add)
+                    if part_to_add.w < image.w and part_to_add.h < image.h:
+                        composition.append(part_to_add)
                 self.__randomize_offsets(composition)
+                assert image.x == 0 and image.y == 0
+                image = compose_growing(composition)
 
         return image
 
@@ -818,6 +821,7 @@ class SynthRiddleGen1:
                     self.__find_pair(g2, node, example_outputs, max_tries=self.max_input_sample_tries)
                     for i in range(num_examples)
                 ]
+
                 # print("before NOP removal", g2.fmt())
                 g2, node = SynthRiddleGen1.remove_nops(g2, node, example_outputs, trainig_examples)
                 if node.depth < self.min_depth:
