@@ -127,7 +127,6 @@ class ViT_NoEmbed(nn.Module):
         heads,
         mlp_dim,
         pool="cls",
-        channels=3,
         dim_head=64,
         dropout=0.0,
         emb_dropout=0.0,
@@ -136,7 +135,6 @@ class ViT_NoEmbed(nn.Module):
     ):
         super().__init__()
 
-        # patch_dim = channels * patch_height * patch_width
         assert pool in {
             "cls",
             "mean",
