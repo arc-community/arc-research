@@ -1,4 +1,4 @@
-from typing import List, Set, Tuple
+from typing import Dict, List, Set, Tuple
 import math
 import random
 import uuid
@@ -52,7 +52,7 @@ class RiddleLoader:
         ],
     }
 
-    def __init__(self, file_names: List[Path], colors_table_name: str):
+    def __init__(self, file_names: List[Path], colors_table_name: str, shuffle_train_test: bool = True):
         self.file_names = file_names
         if len(self.file_names) == 0:
             raise RuntimeError("No riddles found.")
@@ -74,6 +74,7 @@ class RiddleLoader:
             color_mapping.weight.data[i, 1] = g / 255.0
             color_mapping.weight.data[i, 2] = b / 255.0
         self.color_mapping = color_mapping
+        self.shuffle_train_test = shuffle_train_test
 
     def shuffle(self) -> None:
         random.shuffle(self.order)
@@ -89,8 +90,9 @@ class RiddleLoader:
 
     def load_batch(
         self, batch_size: int, device: torch.DeviceObjType
-    ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor, List[str]]:
         riddles = [self.next_riddle() for i in range(batch_size)]
+        riddle_ids = [r.riddle_id for r in riddles]
         max_train_examples = max(len(r.train) for r in riddles)
 
         inputs = torch.zeros(batch_size, max_train_examples * 2 + 1, 3, 10, 10)  # train input+output = 2 + 1 test input
@@ -102,9 +104,11 @@ class RiddleLoader:
         for i, r in enumerate(riddles):
 
             all_pairs = list(r.train)
-            all_pairs.extend(r.test)
-            random.shuffle(all_pairs)
+            # all_pairs.extend(r.test)
+            all_pairs.append(r.test[0])  # for now only use first test example if multiple are available
 
+            if self.shuffle_train_test:
+                random.shuffle(all_pairs)
             train_pairs = all_pairs[:-1]
             test_pair = all_pairs[-1]
 
@@ -126,7 +130,7 @@ class RiddleLoader:
             targets[i] = color_mapping(test_output_board).permute(2, 0, 1)
 
         inputs, targets, target_boards = (x.to(device) for x in (inputs, targets, target_boards))
-        return inputs, targets, target_boards
+        return inputs, targets, target_boards, riddle_ids
 
 
 def parse_args() -> argparse.Namespace:
@@ -180,8 +184,10 @@ def parse_args() -> argparse.Namespace:
     )
 
     parser.add_argument("--color_table", default="mokole", type=str)
-
     parser.add_argument("--save_eval_images", default=True, type=str2bool)
+
+    parser.add_argument("command", help="train or eval")
+    parser.add_argument("--restore", type=str, help="file name of checkpoint to load")
 
     return parser.parse_args()
 
@@ -216,13 +222,23 @@ def eval_model(
     model,
     riddle_loader: RiddleLoader,
     loss_fn,
-) -> Tuple[float, float]:
+) -> Tuple[float, float, Dict[str, float]]:
     model.eval()
 
     total_loss = 0
     total_accuracy = 0
-    for i in range(num_batches):
-        inputs, targets, target_boards = riddle_loader.load_batch(batch_size, device)
+
+    num_total = len(riddle_loader.file_names) if num_batches < 0 else batch_size * num_batches
+    num_total = min(len(riddle_loader.file_names), num_total)
+
+    accuracy_by_id = {}
+
+    remaining = num_total
+    while remaining > 0:
+        N = min(remaining, batch_size)
+        remaining -= N
+
+        inputs, targets, target_boards, riddle_ids = riddle_loader.load_batch(N, device)
         b, n, *_ = inputs.shape
         inputs = inputs.view(b, n, -1)
         targets = targets.view(b, -1)
@@ -230,13 +246,18 @@ def eval_model(
         y = model(inputs)
 
         loss = loss_fn(y, targets)
-        total_loss += loss.item()
+        total_loss += loss.item() * N
 
         t = quantize_output(y, riddle_loader.color_mapping)
-        accuracy = (t == target_boards).sum() / t.numel()
-        total_accuracy += accuracy.item()
 
-    return total_loss / num_batches, total_accuracy / num_batches
+        accuracy_per_riddle = (t == target_boards).sum(dim=[1, 2]) / t[0].numel()
+        for j, rid in enumerate(riddle_ids):
+            accuracy_by_id[rid] = accuracy_per_riddle[j].item()
+
+        accuracy = (t == target_boards).sum() / t.numel()
+        total_accuracy += accuracy.item() * N
+
+    return total_loss / num_total, total_accuracy / num_total, accuracy_by_id
 
 
 @torch.no_grad()
@@ -245,7 +266,7 @@ def eval_model_visual(
 ) -> Tuple[float, float]:
     model.eval()
 
-    inputs, targets, target_boards = riddle_loader.load_batch(batch_size, device)
+    inputs, targets, target_boards, _ = riddle_loader.load_batch(batch_size, device)
 
     b, n, c, h, w = inputs.shape
     y = model(inputs.view(b, n, -1))
@@ -275,97 +296,67 @@ def eval_model_visual(
     return riddle_grid
 
 
-def main():
-    print(f"Using pytorch version {torch.__version__}")
-    args = parse_args()
+def optim_to(optim, device):
+    for param in optim.state.values():
+        # Not sure there are any global tensors in the state dict
+        if isinstance(param, torch.Tensor):
+            param.data = param.data.to(device)
+            if param._grad is not None:
+                param._grad.data = param._grad.data.to(device)
+        elif isinstance(param, dict):
+            for subparam in param.values():
+                if isinstance(subparam, torch.Tensor):
+                    subparam.data = subparam.data.to(device)
+                    if subparam._grad is not None:
+                        subparam._grad.data = subparam._grad.data.to(device)
 
-    print("Effective args:", args)
 
+def run_eval(
+    args: argparse.Namespace, device: torch.DeviceObjType, riddle_loader_eval: RiddleLoader, model: nn.Module
+):
+    batch_size = args.batch_size
     experiment_name = args.name
-    if args.wandb:
-        wandb_mode = "online"
-        wandb.login()
-    else:
-        wandb_mode = "disabled"
-    wandb.init(project=args.project, config=vars(args), mode=wandb_mode, name=args.name)
+    loss_fn = nn.MSELoss()
 
-    torch.manual_seed(args.manual_seed)
-    device = torch.device(args.device, args.device_index)
-    file_names = list(Path(args.riddle_folder).expanduser().glob("*.json"))
+    if args.save_eval_images:
+        num_total = len(riddle_loader_eval.file_names)
+        remaining = num_total
+        i = 0
+        while remaining > 0:
+            N = min(remaining, batch_size)
+            remaining -= N
+            eval_grid = eval_model_visual(device, N, model, riddle_loader_eval)
+            torchvision.utils.save_image(eval_grid, f"{experiment_name}_evalrun_{i:03d}.png")
+            i += 1
 
-    # go over dataset and select all 10x10 riddles with equal input & output size and 3 training examples
-    training_set = []
+    eval_loss, eval_accuracy, accuracy_by_id = eval_model(device, batch_size, -1, model, riddle_loader_eval, loss_fn)
 
-    print("filtering 10x10 riddles")
-    max_trainig_examples = -1  # 128  # for dev only
-    for fn in tqdm(file_names):
-        r = load_riddle_from_file(fn)
-        if all(
-            bp.input.num_cols == 10
-            and bp.input.num_rows == 10
-            and bp.output.num_cols == 10
-            and bp.output.num_rows == 10
-            for bp in r.train
-        ) and all(
-            bp.input.num_cols == 10
-            and bp.input.num_rows == 10
-            and bp.output.num_cols == 10
-            and bp.output.num_rows == 10
-            for bp in r.test
-        ):
-            training_set.append(fn)
-            if max_trainig_examples > 0 and len(training_set) > max_trainig_examples:
-                break
+    for k, v in accuracy_by_id.items():
+        print(f"{k}: {v:.2%}")
 
-    num_train_riddles = len(training_set) * 80 // 100
-    eval_file_names = training_set[num_train_riddles:]
-    train_file_names = training_set[:num_train_riddles]
-    print(f"Num train riddles: {len(train_file_names)}")
-    print(f"Num eval riddles: {len(eval_file_names)}")
+    print(f"eval loss: {eval_loss:.4e}; eval accuracy: {eval_accuracy:.2%};")
+
+
+def run_train(
+    args: argparse.Namespace,
+    device: torch.DeviceObjType,
+    riddle_loader: RiddleLoader,
+    riddle_loader_eval: RiddleLoader,
+    model: nn.Module,
+    optimizer,
+    lr_scheduler,
+    scheduler_cosine,
+):
+    checkpoint_interval = args.checkpoint_interval
+    batch_size = args.batch_size
+    max_steps = args.max_steps
+    experiment_name = args.name
 
     loss_fn = nn.MSELoss()
 
-    rl = RiddleLoader(file_names=train_file_names, colors_table_name=args.color_table)
-    riddle_loader_eval = RiddleLoader(file_names=eval_file_names, colors_table_name=args.color_table)
-    batch, targets, _ = rl.load_batch(1, device)
-
-    num_patches = batch.shape[1]
-    patch_dim = batch.shape[2] * batch.shape[3] * batch.shape[4]
-
-    model = ViT_NoEmbed(
-        num_patches=num_patches,
-        patch_dim=patch_dim,
-        num_classes=targets[0].numel(),
-        dim=args.dim,
-        depth=args.depth,
-        heads=args.heads,
-        mlp_dim=args.mlp_dim,
-    )
-    model.to(device)
-
-    batch_size = args.batch_size
-    max_steps = args.max_steps
-
-    optimizer = optim.AdamW(
-        model.parameters(),
-        lr=args.lr,
-        betas=(0.9, 0.999),
-        weight_decay=args.weight_decay,
-        amsgrad=False,
-    )
-
-    scheduler_cosine = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, args.max_steps)
-    lr_scheduler = GradualWarmupScheduler(
-        optimizer,
-        multiplier=1.0,
-        total_epoch=args.warmup,
-        after_scheduler=scheduler_cosine,
-    )
-
-    checkpoint_interval = args.checkpoint_interval
     for step in range(1, max_steps + 1):
         if step % args.eval_interval == 0:
-            eval_loss, eval_accuracy = eval_model(
+            eval_loss, eval_accuracy, _ = eval_model(
                 device,
                 batch_size,
                 args.num_eval_batches,
@@ -385,7 +376,7 @@ def main():
         model.train()
         optimizer.zero_grad()
 
-        batch, targets, target_boards = rl.load_batch(batch_size, device)
+        batch, targets, target_boards, _ = riddle_loader.load_batch(batch_size, device)
         b, n, *_ = batch.shape
         batch = batch.view(b, n, -1)
         target = targets.view(b, -1)
@@ -398,7 +389,7 @@ def main():
         optimizer.step()
         lr_scheduler.step()
 
-        t = quantize_output(y, rl.color_mapping)
+        t = quantize_output(y, riddle_loader.color_mapping)
         train_accuracy = (t == target_boards).sum() / t.numel()
 
         if step % 10 == 0:
@@ -432,6 +423,112 @@ def main():
                 },
                 fn,
             )
+
+
+def main():
+    print(f"Using pytorch version {torch.__version__}")
+    args = parse_args()
+
+    print("Effective args:", args)
+
+    if args.wandb:
+        wandb_mode = "online"
+        wandb.login()
+    else:
+        wandb_mode = "disabled"
+    wandb.init(project=args.project, config=vars(args), mode=wandb_mode, name=args.name)
+
+    torch.manual_seed(args.manual_seed)
+    device = torch.device(args.device, args.device_index)
+    file_names = list(Path(args.riddle_folder).expanduser().glob("*.json"))
+
+    # go over dataset and select all 10x10 riddles with equal input & output size and 3 training examples
+    training_set = []
+
+    print("filtering 10x10 riddles")
+    max_trainig_examples = -1  # 128  # for dev only
+    for fn in tqdm(file_names):
+        r = load_riddle_from_file(fn)
+        if all(
+            len(r.train) == 3
+            and bp.input.num_cols == 10
+            and bp.input.num_rows == 10
+            and bp.output.num_cols == 10
+            and bp.output.num_rows == 10
+            for bp in r.train
+        ) and all(
+            bp.input.num_cols == 10
+            and bp.input.num_rows == 10
+            and bp.output.num_cols == 10
+            and bp.output.num_rows == 10
+            for bp in r.test
+        ):
+            training_set.append(fn)
+            if max_trainig_examples > 0 and len(training_set) > max_trainig_examples:
+                break
+
+    if args.command == "eval":
+        eval_file_names = training_set
+        train_file_names = None
+    else:
+        num_train_riddles = len(training_set) * 80 // 100
+        eval_file_names = training_set[num_train_riddles:]
+        train_file_names = training_set[:num_train_riddles]
+        print(f"Num train riddles: {len(train_file_names)}")
+        rl = RiddleLoader(file_names=train_file_names, colors_table_name=args.color_table)
+
+    print(f"Num eval riddles: {len(eval_file_names)}")
+    riddle_loader_eval = RiddleLoader(file_names=eval_file_names, colors_table_name=args.color_table, shuffle_train_test=False)
+
+    batch, targets, *_ = riddle_loader_eval.load_batch(1, device)
+    num_patches = batch.shape[1]
+    patch_dim = batch.shape[2] * batch.shape[3] * batch.shape[4]
+
+    chkpt_data = torch.load(args.restore, map_location="cpu") if args.restore is not None else None
+
+    model = ViT_NoEmbed(
+        num_patches=num_patches,
+        patch_dim=patch_dim,
+        num_classes=targets[0].numel(),
+        dim=args.dim,
+        depth=args.depth,
+        heads=args.heads,
+        mlp_dim=args.mlp_dim,
+    )
+
+    if chkpt_data:
+        model.load_state_dict(chkpt_data["model_state_dict"])
+
+    model.to(device)
+
+    optimizer = optim.AdamW(
+        model.parameters(),
+        lr=args.lr,
+        betas=(0.9, 0.999),
+        weight_decay=args.weight_decay,
+        amsgrad=False,
+    )
+
+    scheduler_cosine = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, args.max_steps)
+    lr_scheduler = GradualWarmupScheduler(
+        optimizer,
+        multiplier=1.0,
+        total_epoch=args.warmup,
+        after_scheduler=scheduler_cosine,
+    )
+
+    if chkpt_data:
+        optimizer.load_state_dict(chkpt_data["optimizer_state_dict"])
+        optim_to(optimizer, device)
+        scheduler_cosine.load_state_dict(chkpt_data["cosine_scheduler_state_dict"])
+        lr_scheduler.load_state_dict(chkpt_data["warmup_scheduler_state_dict"])
+
+    if args.command == "eval":
+        run_eval(args, device, riddle_loader_eval, model)
+    elif args.command == "train":
+        run_train(args, device, rl, riddle_loader_eval, model, optimizer, lr_scheduler, scheduler_cosine)
+    else:
+        print(f"unsupported command: {args.command}")
 
 
 if __name__ == "__main__":
