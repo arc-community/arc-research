@@ -1,4 +1,6 @@
 from __future__ import annotations
+from collections import OrderedDict
+import json
 import random
 from typing import Callable, Iterable, Tuple, List, overload
 from pathlib import Path
@@ -266,6 +268,19 @@ def Col(id: int) -> Image:
     return full((0, 0), (1, 1), id)
 
 
+def square(side_len: int, color: int = 0) -> Image:
+    return full((0, 0), (side_len, side_len), color)
+
+
+def outer_border(img: Image, border_color: int = 1) -> Image:
+    rsz = img.sz + Point(2, 2)
+    ret = full(img.p - Point(1, 1), rsz, border_color)
+    for i in range(img.h):
+        for j in range(img.w):
+            ret[i + 1, j + 1] = img[i, j]
+    return ret
+
+
 def color_mask(img: Image) -> int:
     mask = 0
     for i in range(img.h):
@@ -404,7 +419,7 @@ def compose(a: Image, b: Image, id: int = 0) -> Image:
     return badImg
 
 
-def compose_list(imgs: List[Image], id: int=0) -> Image:
+def compose_list(imgs: List[Image], id: int = 0) -> Image:
     if len(imgs) == 0:
         return badImg
     ret = imgs[0].copy()
@@ -505,3 +520,48 @@ class PartSampler:
             symbols.add(p)
 
         return list(symbols)
+
+
+def check_overlap(objs: List[Image], margin: int = 0):
+    m = margin
+    remain = list(objs)
+    while len(remain) > 1:
+        a = remain.pop()
+        for b in remain:
+            if a.x < b.x + b.w + m and a.x + a.w + m > b.x and a.y < b.y + b.h + m and a.y + a.h + m > b.y:
+                return True
+    return False
+
+
+def sample_non_overlapping_positions(sz: Point, objs: List[Image], margin: int = 0):
+    while True:
+        # randomize object positions
+        for o in objs:
+            o.x = random.randint(0, sz.x - o.w)
+            o.y = random.randint(0, sz.y - o.h)
+        if not check_overlap(objs, margin=margin):
+            break
+
+
+def riddle_to_json(train_pairs: List[Tuple[Image, Image]], test_pairs: List[Tuple[Image, Image]]) -> str:
+    assert len(train_pairs) > 0 and len(test_pairs) > 0
+
+    def pairs_to_json(p):
+        return [OrderedDict(input=x[0].np.tolist(), output=x[1].np.tolist()) for x in p]
+
+    riddle = OrderedDict(train=pairs_to_json(train_pairs), test=pairs_to_json(test_pairs))
+    return json.dumps(riddle)
+
+
+def print_riddle(train_pairs: List[Tuple[Image, Image]], test_pairs: List[Tuple[Image, Image]]):
+    def print_pairs(ps):
+        for i, p in enumerate(ps):
+            print(f"[{i}] Input:")
+            print(p[0].fmt(True))
+            print(f"[{i}] Output:")
+            print(p[1].fmt(True))
+
+    print("Training pairs:")
+    print_pairs(train_pairs)
+    print("Test pairs:")
+    print_pairs(test_pairs)

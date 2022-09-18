@@ -1,56 +1,9 @@
-from collections import OrderedDict
-import json
 import random
 from typing import List, Tuple
-from riddle_script import Image, Point, PartSampler, color_shape_const, random_colors, empty, compose, compose_list
+from riddle_script import Image, Point, PartSampler, color_shape_const, random_colors, empty, compose, compose_list, sample_non_overlapping_positions, print_riddle
 
 
-def check_overlap(objs: List[Image], margin: int = 0):
-    m = margin
-    remain = list(objs)
-    while len(remain) > 1:
-        a = remain.pop()
-        for b in remain:
-            if a.x < b.x + b.w + m and a.x + a.w + m > b.x and a.y < b.y + b.h + m and a.y + a.h + m > b.y:
-                return True
-    return False
-
-
-def sample_non_overlapping_positions(sz: Point, objs: List[Image], margin: int = 0):
-    while True:
-        # randomize object positions
-        for o in objs:
-            o.x = random.randint(0, sz.x - o.w)
-            o.y = random.randint(0, sz.y - o.h)
-        if not check_overlap(objs, margin=margin):
-            break
-
-
-def riddle_to_json(train_pairs: List[Tuple[Image, Image]], test_pairs: List[Tuple[Image, Image]]) -> str:
-    assert len(train_pairs) > 0 and len(test_pairs) > 0
-
-    def pairs_to_json(p):
-        return [OrderedDict(input=x[0].np.tolist(), output=x[1].np.tolist()) for x in p]
-
-    riddle = OrderedDict(train=pairs_to_json(train_pairs), test=pairs_to_json(test_pairs))
-    return json.dumps(riddle)
-
-
-def print_riddle(train_pairs: List[Tuple[Image, Image]], test_pairs: List[Tuple[Image, Image]]):
-    def print_pairs(ps):
-        for i,p in enumerate(ps):
-            print(f'[{i}] Input:')
-            print(p[0].fmt(True))
-            print(f'[{i}] Output:')
-            print(p[1].fmt(True))
-        
-    print('Training pairs:')
-    print_pairs(train_pairs)
-    print('Test pairs:')
-    print_pairs(test_pairs)
-
-
-def generate_009d5c81():
+def generate_009d5c81() -> Tuple[List[Tuple[Image]]]:
     """
     https://github.com/arc-community/arc/wiki/Riddle_Evaluation_009d5c81
 
@@ -116,5 +69,3 @@ def generate_009d5c81():
 if __name__ == "__main__":
     train, test = generate_009d5c81()
     print_riddle(train, test)
-    s = riddle_to_json(train, test)
-    print(s)
