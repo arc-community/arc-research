@@ -1,7 +1,7 @@
 import math
 import random
 from typing import List, Tuple
-from riddle_script import Image, Point, PartSampler, color_shape_const, random_colors, empty, compose, compose_list, sample_non_overlapping_positions, print_riddle, square, outer_border
+from riddle_script import Image, Point, random_colors, empty, compose_list, sample_non_overlapping_positions, print_riddle, square, outer_border
 
 
 def generate_00dbd492() -> Tuple[List[Tuple[Image]]]:
@@ -12,7 +12,7 @@ def generate_00dbd492() -> Tuple[List[Tuple[Image]]]:
     num_examples = 4
 
     num_squares = random.randint(2, 4)
-    inside_length = [2*i + 1 for i in range(4)]
+    inside_length = [2*i + 1 for i in range(1, 5)]
     random.shuffle(inside_length)
     inside_length = inside_length[:num_squares]
 
@@ -43,7 +43,11 @@ def generate_00dbd492() -> Tuple[List[Tuple[Image]]]:
 
         # determine board size
         w = math.ceil(sum(s.w for s in src_squares)) + len(src_squares)
-        w = min(w, 22)
+        if max(s.w for s in src_squares) == 11:
+             w = min(w, 26)
+        else:
+             w = min(w, 22)
+
         board_size = Point(w, w)
 
         sample_non_overlapping_positions(board_size, src_squares, margin=1)
