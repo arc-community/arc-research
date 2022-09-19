@@ -197,6 +197,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("command", help="train or eval")
     parser.add_argument("--restore", type=str, help="file name of checkpoint to load")
     parser.add_argument("--num_train_examples", default=3, type=int, help="filter riddles based on #train examples")
+    parser.add_argument("--max_trainig_riddles", default=-1, type=int, help="maximum number of training files to use")
 
     return parser.parse_args()
 
@@ -469,7 +470,7 @@ def main():
     training_set = []
 
     print("filtering 10x10 riddles")
-    max_trainig_examples = -1  # 128  # for dev only
+    max_trainig_riddles = args.max_trainig_riddles
     for fn in tqdm(file_names):
         r = load_riddle_from_file(fn)
         if all(
@@ -487,7 +488,7 @@ def main():
             for bp in r.test
         ):
             training_set.append(fn)
-            if max_trainig_examples > 0 and len(training_set) > max_trainig_examples:
+            if max_trainig_riddles > 0 and len(training_set) > max_trainig_riddles:
                 break
 
     if args.command == "eval":
