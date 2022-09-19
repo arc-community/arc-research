@@ -1,9 +1,9 @@
 import random
 from typing import List, Tuple
-from riddle_script import Image, Point, PartSampler, color_shape_const, random_colors, empty, compose, compose_list, sample_non_overlapping_positions, print_riddle
+from riddle_script import Image, Point, PartSampler, color_shape_const, random_colors, empty, compose, compose_list, sample_non_overlapping_positions, print_riddle, riddle_to_json
 
 
-def generate_009d5c81() -> Tuple[List[Tuple[Image]]]:
+def generate_009d5c81(min_w=10, min_h=10, max_w=18, max_h=18) -> Tuple[List[Tuple[Image]]]:    
     """
     https://github.com/arc-community/arc/wiki/Riddle_Evaluation_009d5c81
 
@@ -20,10 +20,12 @@ def generate_009d5c81() -> Tuple[List[Tuple[Image]]]:
 
     # We generate two examples for each symbol color transition. One of the examples can then be used as test-example.
 
-    # board sizes (not too small), original is 14x14
-    w = random.randint(10, 18)
-    h = random.randint(10, 18)
+    assert min_w >= 10 and min_h >= 10 and min_w <= max_w and min_h <= max_h
 
+    # board sizes (not too small), original is 14x14
+    w = random.randint(min_w, max_w)
+    h = random.randint(min_h, max_h)
+    
     # number of color-change example-pairs (3 is a reasonable number)
     num_color_pairs = 3
 
@@ -66,6 +68,31 @@ def generate_009d5c81() -> Tuple[List[Tuple[Image]]]:
     return train, test
 
 
+from pathlib import Path
+from tqdm import tqdm
+
+def generate_10x10_dataset():
+    overwrite = False
+    output_dir = Path('./e_009d5c81_10x10_250k/')
+    output_dir.mkdir(parents=True, exist_ok=True)
+    i = 0
+    total_riddles = 250000
+    with tqdm(total=total_riddles) as pbar:
+        while i < total_riddles:
+            train, test = generate_009d5c81(10, 10, 10, 10)
+            h = hash(tuple(train + test)) & 0xFFFFFFFF
+            fn = f"{h:08x}.json"
+            fn = output_dir / fn
+            if not overwrite and fn.exists():
+                print(f"File {fn} already exists.")
+                continue
+            j = riddle_to_json(train, test)
+            fn.write_text(j)
+            i += 1
+            pbar.update(1)
+
+
 if __name__ == "__main__":
+    # generate_10x10_dataset()
     train, test = generate_009d5c81()
     print_riddle(train, test)
