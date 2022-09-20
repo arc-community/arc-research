@@ -6,8 +6,6 @@ from arc.utils import dataset
 import random
 from functools import partial
 
-from numpy import imag
-
 from image import (
     Point,
     Image,

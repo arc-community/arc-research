@@ -196,6 +196,7 @@ def parse_args() -> argparse.Namespace:
 
     parser.add_argument("command", help="train or eval")
     parser.add_argument("--restore", type=str, help="file name of checkpoint to load")
+    parser.add_argument("--restore_optim", default=True, type=str2bool, help="whether to restore optimizer state")
     parser.add_argument("--num_train_examples", default=3, type=int, help="filter riddles based on #train examples")
     parser.add_argument("--max_trainig_riddles", default=-1, type=int, help="maximum number of training files to use")
 
@@ -547,7 +548,7 @@ def main():
         after_scheduler=scheduler_cosine,
     )
 
-    if chkpt_data:
+    if chkpt_data and args.restore_optim:
         optimizer.load_state_dict(chkpt_data["optimizer_state_dict"])
         optim_to(optimizer, device)
         scheduler_cosine.load_state_dict(chkpt_data["cosine_scheduler_state_dict"])
