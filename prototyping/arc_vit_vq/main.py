@@ -15,10 +15,10 @@ import torchvision
 
 import wandb
 
-from arc.interface import Riddle
+from arc.interface import Riddle, Board
 from arc.utils.dataset import load_riddle_from_file
 
-from vit import EncDecViT, ViT_NoEmbed
+from vit import EncDecViT
 from warmup_scheduler import GradualWarmupScheduler
 
 
@@ -96,13 +96,16 @@ class RiddleLoader:
         return r
 
     def load_batch(
-        self, batch_size: int, device: torch.DeviceObjType
+        self,
+        batch_size: int,
+        device: torch.DeviceObjType,
+        color_permutations: bool = False,
     ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor, List[str]]:
         riddles = [self.next_riddle() for i in range(batch_size)]
         riddle_ids = [r.riddle_id for r in riddles]
         max_train_examples = max(len(r.train) for r in riddles)
 
-        inputs = torch.zeros(batch_size, max_train_examples * 2, 3, 10, 10)  # train input+output = 2 + 1 test input
+        inputs = torch.zeros(batch_size, max_train_examples * 2, 3, 10, 10)  # 2 = input & output
         tests = torch.zeros(batch_size, 1, 3, 10, 10)
         targets = torch.zeros(batch_size, 3, 10, 10)
         target_boards = torch.zeros(batch_size, 10, 10, dtype=torch.long)
@@ -120,20 +123,29 @@ class RiddleLoader:
             train_pairs = all_pairs[:-1]
             test_pair = all_pairs[-1]
 
+            # random color permutation augmentation
+            c = list(range(1, 10))
+            if color_permutations:
+                random.shuffle(c)
+            c = [0] + c
+
+            def permute_colors(board: Board):
+                return torch.tensor([c[x] for x in board.data_flat]).view(board.num_rows, board.num_cols)
+
             # encode train examples
             for j, t in enumerate(train_pairs):
                 # add input board
-                input_board = torch.from_numpy(t.input.np)
+                input_board = permute_colors(t.input)
                 inputs[i, j * 2] = color_mapping(input_board).permute(2, 0, 1)
                 # add output board
-                output_board = torch.from_numpy(t.output.np)
+                output_board = permute_colors(t.output)
                 inputs[i, j * 2 + 1] = color_mapping(output_board).permute(2, 0, 1)
 
             # add test input
-            test_input_board = torch.from_numpy(test_pair.input.np)
+            test_input_board = permute_colors(test_pair.input)
             tests[i, 0] = color_mapping(test_input_board).permute(2, 0, 1)
 
-            test_output_board = torch.from_numpy(test_pair.output.np)
+            test_output_board = permute_colors(test_pair.output)
             target_boards[i] = test_output_board
             targets[i] = color_mapping(test_output_board).permute(2, 0, 1)
 
@@ -200,9 +212,24 @@ def parse_args() -> argparse.Namespace:
 
     parser.add_argument("command", help="train or eval")
     parser.add_argument("--restore", type=str, help="file name of checkpoint to load")
-    parser.add_argument("--restore_optim", default=True, type=str2bool, help="whether to restore optimizer state")
-    parser.add_argument("--num_train_examples", default=3, type=int, help="filter riddles based on #train examples")
-    parser.add_argument("--max_training_riddles", default=-1, type=int, help="maximum number of training files to use")
+    parser.add_argument(
+        "--restore_optim",
+        default=True,
+        type=str2bool,
+        help="whether to restore optimizer state",
+    )
+    parser.add_argument(
+        "--num_train_examples",
+        default=3,
+        type=int,
+        help="filter riddles based on #train examples",
+    )
+    parser.add_argument(
+        "--max_training_riddles",
+        default=-1,
+        type=int,
+        help="maximum number of training files to use",
+    )
 
     return parser.parse_args()
 
@@ -254,7 +281,13 @@ def eval_model(
         N = min(remaining, batch_size)
         remaining -= N
 
-        train_inputs, test_inputs, targets, target_boards, riddle_ids = riddle_loader.load_batch(N, device)
+        (
+            train_inputs,
+            test_inputs,
+            targets,
+            target_boards,
+            riddle_ids,
+        ) = riddle_loader.load_batch(N, device, color_permutations=True)
         b, n, *_ = train_inputs.shape
         train_inputs = train_inputs.view(b, n, -1)
         test_inputs = test_inputs.view(b, 1, -1)
@@ -283,7 +316,9 @@ def eval_model_visual(
 ) -> Tuple[float, float]:
     model.eval()
 
-    train_inputs, test_inputs, targets, target_boards, _ = riddle_loader.load_batch(batch_size, device)
+    train_inputs, test_inputs, targets, target_boards, _ = riddle_loader.load_batch(
+        batch_size, device, color_permutations=True
+    )
 
     b, n, c, h, w = train_inputs.shape
     y = model(train_inputs.view(b, n, -1), test_inputs.view(b, 1, -1))
@@ -408,8 +443,10 @@ def run_train(
         model.train()
         optimizer.zero_grad()
 
-        train_batch, test_batch, targets, target_boards, _ = riddle_loader.load_batch(batch_size, device)
-        
+        train_batch, test_batch, targets, target_boards, _ = riddle_loader.load_batch(
+            batch_size, device, color_permutations=True
+        )
+
         b, n, *_ = train_batch.shape
         train_batch = train_batch.view(b, n, -1)
         test_batch = test_batch.view(b, 1, -1)
@@ -460,7 +497,6 @@ def run_train(
             )
 
 
-
 def main():
     print(f"Using pytorch version {torch.__version__}")
     args = parse_args()
@@ -491,7 +527,7 @@ def main():
             nodes = gd["nodes"]
             if len(nodes) > 2:  # input node + single transform
                 continue
-            
+
         if all(
             len(r.train) == args.num_train_examples
             and bp.input.num_cols == 10
@@ -527,14 +563,14 @@ def main():
         shuffle_train_test=False,
     )
 
-    train_batch, test_batch, targets, *_ = riddle_loader_eval.load_batch(1, device)
+    train_batch, test_batch, targets, *_ = riddle_loader_eval.load_batch(1, device, color_permutations=True)
 
     num_patches = train_batch.shape[1]
     patch_dim = train_batch.shape[2] * train_batch.shape[3] * train_batch.shape[4]
 
     chkpt_data = torch.load(args.restore, map_location="cpu") if args.restore is not None else None
 
-    #model = ViT_NoEmbed(
+    # model = ViT_NoEmbed(
     model = EncDecViT(
         num_patches=num_patches,
         patch_dim=patch_dim,
