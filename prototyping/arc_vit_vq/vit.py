@@ -43,13 +43,13 @@ class PreNorm(nn.Module):
 
 
 class FeedForward(nn.Module):
-    def __init__(self, dim, hidden_dim, dropout=0.0):
+    def __init__(self, dim, hidden_dim, dropout=0.0, out_dim=None):
         super().__init__()
         self.net = nn.Sequential(
             nn.Linear(dim, hidden_dim),
             nn.GELU(),
             nn.Dropout(dropout),
-            nn.Linear(hidden_dim, dim),
+            nn.Linear(hidden_dim, default(out_dim, dim)),
             nn.Dropout(dropout),
         )
 
@@ -71,11 +71,7 @@ class Attention(nn.Module):
 
         self.to_qkv = nn.Linear(dim, inner_dim * 3, bias=False)
 
-        self.to_out = (
-            nn.Sequential(nn.Linear(inner_dim, dim), nn.Dropout(dropout))
-            if project_out
-            else nn.Identity()
-        )
+        self.to_out = nn.Sequential(nn.Linear(inner_dim, dim), nn.Dropout(dropout)) if project_out else nn.Identity()
 
     def forward(self, x):
         qkv = self.to_qkv(x).chunk(3, dim=-1)
@@ -251,7 +247,11 @@ class EncDecViT(nn.Module):
         mlp_dim,
         dim_head=64,
         tie_ff_weights=False,
-        tie_attn_weights=False
+        tie_attn_weights=False,
+        num_latents=1,
+        latent_dim=None,
+        cross_heads=None,
+        cross_dim_head=None
     ):
         super().__init__()
 
@@ -268,27 +268,24 @@ class EncDecViT(nn.Module):
             tie_attn_weights=tie_attn_weights,
         )
 
-        num_latents = 1
-        latent_dim = dim
-        cross_heads = heads
-        cross_dim_head = dim_head
+        latent_dim = default(latent_dim, dim)
+        cross_heads = default(cross_heads, heads)
+        cross_dim_head = default(cross_dim_head, dim_head)
         self.latents = nn.Parameter(torch.randn(num_latents, latent_dim))
 
         self.cross_attend_blocks = nn.ModuleList(
             [
                 PreNorm(
                     latent_dim,
-                    CrossAttention(
-                        latent_dim, dim, heads=cross_heads, dim_head=cross_dim_head
-                    ),
+                    CrossAttention(latent_dim, dim, heads=cross_heads, dim_head=cross_dim_head),
                     context_dim=dim,
                 ),
-                PreNorm(latent_dim, FeedForward(latent_dim, hidden_dim=latent_dim * 4)),
+                PreNorm(latent_dim, FeedForward(latent_dim, hidden_dim=latent_dim * 4, out_dim=dim)),
             ]
         )
 
         self.decoder = ViT_NoEmbed(
-            num_patches=2,  # description token + test input
+            num_patches=num_latents + 1,  # description token + test input
             patch_dim=patch_dim,
             num_classes=num_classes,
             dim=dim,
@@ -307,7 +304,7 @@ class EncDecViT(nn.Module):
         # query 'transformation token' from encoder output
         x = repeat(self.latents, "n d -> b n d", b=train_examples.size(0))
         x = cross_attn(x, context=context, mask=None) + x
-        x = cross_ff(x) + x
+        x = cross_ff(x)
 
         # combine transformation token and test-example and pass them through decoder
         return self.decoder(test_example, y=x)

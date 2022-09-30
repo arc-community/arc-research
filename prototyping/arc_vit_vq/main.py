@@ -59,6 +59,7 @@ class RiddleLoader:
         file_names: List[Path],
         colors_table_name: str,
         shuffle_train_test: bool = True,
+        color_permutations: bool = False,
     ):
         self.file_names = file_names
         if len(self.file_names) == 0:
@@ -82,6 +83,7 @@ class RiddleLoader:
             color_mapping.weight.data[i, 2] = b / 255.0
         self.color_mapping = color_mapping
         self.shuffle_train_test = shuffle_train_test
+        self.color_permutations = color_permutations
 
     def shuffle(self) -> None:
         random.shuffle(self.order)
@@ -96,10 +98,7 @@ class RiddleLoader:
         return r
 
     def load_batch(
-        self,
-        batch_size: int,
-        device: torch.DeviceObjType,
-        color_permutations: bool = False,
+        self, batch_size: int, device: torch.DeviceObjType
     ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor, List[str]]:
         riddles = [self.next_riddle() for i in range(batch_size)]
         riddle_ids = [r.riddle_id for r in riddles]
@@ -125,7 +124,7 @@ class RiddleLoader:
 
             # random color permutation augmentation
             c = list(range(1, 10))
-            if color_permutations:
+            if self.color_permutations:
                 random.shuffle(c)
             c = [0] + c
 
@@ -190,6 +189,10 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--mlp_dim", default=4096, type=int)
     parser.add_argument("--tie_ff", default=False, type=str2bool, help="Tie feed-forward weights of ViT")
     parser.add_argument("--tie_attn", default=False, type=str2bool, help="Tie attention weights of ViT")
+    parser.add_argument("--num_latents", default=1, type=int)
+    parser.add_argument("--latent_dim", default=None, type=int)
+    parser.add_argument("--cross_heads", default=8, type=int)
+    parser.add_argument("--cross_dim_head", default=None, type=int)
 
     parser.add_argument("--eval_interval", default=500, type=int)
     parser.add_argument("--num_eval_batches", default=32, type=int)
@@ -287,7 +290,7 @@ def eval_model(
             targets,
             target_boards,
             riddle_ids,
-        ) = riddle_loader.load_batch(N, device, color_permutations=True)
+        ) = riddle_loader.load_batch(N, device)
         b, n, *_ = train_inputs.shape
         train_inputs = train_inputs.view(b, n, -1)
         test_inputs = test_inputs.view(b, 1, -1)
@@ -316,9 +319,7 @@ def eval_model_visual(
 ) -> Tuple[float, float]:
     model.eval()
 
-    train_inputs, test_inputs, targets, target_boards, _ = riddle_loader.load_batch(
-        batch_size, device, color_permutations=True
-    )
+    train_inputs, test_inputs, targets, target_boards, _ = riddle_loader.load_batch(batch_size, device)
 
     b, n, c, h, w = train_inputs.shape
     y = model(train_inputs.view(b, n, -1), test_inputs.view(b, 1, -1))
@@ -443,9 +444,7 @@ def run_train(
         model.train()
         optimizer.zero_grad()
 
-        train_batch, test_batch, targets, target_boards, _ = riddle_loader.load_batch(
-            batch_size, device, color_permutations=True
-        )
+        train_batch, test_batch, targets, target_boards, _ = riddle_loader.load_batch(batch_size, device)
 
         b, n, *_ = train_batch.shape
         train_batch = train_batch.view(b, n, -1)
@@ -554,16 +553,17 @@ def main():
         eval_file_names = training_set[num_train_riddles:]
         train_file_names = training_set[:num_train_riddles]
         print(f"Num train riddles: {len(train_file_names)}")
-        rl = RiddleLoader(file_names=train_file_names, colors_table_name=args.color_table)
+        rl = RiddleLoader(file_names=train_file_names, colors_table_name=args.color_table, color_permutations=True)
 
     print(f"Num eval riddles: {len(eval_file_names)}")
     riddle_loader_eval = RiddleLoader(
         file_names=eval_file_names,
         colors_table_name=args.color_table,
         shuffle_train_test=False,
+        color_permutations=False,
     )
 
-    train_batch, test_batch, targets, *_ = riddle_loader_eval.load_batch(1, device, color_permutations=True)
+    train_batch, test_batch, targets, *_ = riddle_loader_eval.load_batch(1, device)
 
     num_patches = train_batch.shape[1]
     patch_dim = train_batch.shape[2] * train_batch.shape[3] * train_batch.shape[4]
@@ -582,6 +582,10 @@ def main():
         mlp_dim=args.mlp_dim,
         tie_attn_weights=args.tie_attn,
         tie_ff_weights=args.tie_ff,
+        num_latents=args.num_latents,
+        latent_dim=args.latent_dim,
+        cross_heads=args.cross_heads,
+        cross_dim_head=args.cross_dim_head,
     )
 
     if chkpt_data:
