@@ -697,6 +697,7 @@ class SynthRiddleGen1:
         for i, t in enumerate(n.fn.parameter_types):
             if len(nodes_by_type[t]) == 0:
                 return False
+
             source_node = random.choice(nodes_by_type[t])
             n.connect_input(i, source_node)
 
@@ -806,6 +807,9 @@ class SynthRiddleGen1:
             if n.depth >= self.min_depth and n.depth <= self.max_depth and n.return_type == ParameterType.Image
         ]
 
+        # shuffle candidates, to test generated graphs in random order
+        random.shuffle(candidates)
+
         for node in candidates:
             if self.max_examples > self.min_examples:
                 num_examples = random.randint(self.min_examples, self.max_examples)
@@ -820,12 +824,12 @@ class SynthRiddleGen1:
                     for i in range(num_examples)
                 ]
 
-                # print("before NOP removal", g2.fmt())
+                #print("before NOP removal", g2.fmt())
                 g2, node = SynthRiddleGen1.remove_nops(g2, node, example_outputs, trainig_examples)
                 if node.depth < self.min_depth:
                     continue  # graph after pruning too shallow
 
-                # print("after NOP remoal", g2.fmt())
+                #print("after NOP remoal", g2.fmt())
                 return trainig_examples, g2, node
             except RuntimeError:
                 pass
