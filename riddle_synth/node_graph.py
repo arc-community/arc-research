@@ -399,7 +399,7 @@ def register_functions(f: NodeFactory):
     f.register_unary("center", center)
     f.register_unary("majority_color_image", majority_color_image)
 
-    for i in range(1, 9):
+    for i in range(0, 9):
         f.register_unary(f"rigid_{i}", partial(rigid, id=i))
 
     for a in range(3):
@@ -728,6 +728,9 @@ class SynthRiddleGen1:
         # for each unary function determine if it has an influence on the output of at least one examples, if not remove it
         for n in g.nodes.copy():
             if type(n) is FunctionNode and n.is_unary_image:  # unary function
+                if len(g.nodes) == 2 and g.nodes[1].name == 'rigid_0':  # allow graphs with single identify transform (rigid_0)
+                    break
+
                 gc = g.copy()
                 nc = gc.get_node_by_id(n.id)
                 if n.id == output_node.id:
@@ -756,7 +759,7 @@ class SynthRiddleGen1:
         output_image = outputs[node.id]
 
         # input must differ from output
-        if input_image.mask == output_image.mask:
+        if input_image.mask == output_image.mask and (node.name != 'rigid_0' or len(a) != 2):   # allow identity (rigid_0)
             return False
 
         if input_image.area < 4 or output_image.area < 1:
