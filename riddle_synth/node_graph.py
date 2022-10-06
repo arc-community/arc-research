@@ -684,6 +684,7 @@ class SynthRiddleGen1:
         self.sample_node_count = sample_node_count
         self.min_depth = min_depth
         self.max_depth = max_depth
+        self.max_out_size = Point(30, 30)
         self.max_input_sample_tries = max_input_sample_tries
         self.min_examples = min_examples
         self.max_examples = max_examples
@@ -728,8 +729,8 @@ class SynthRiddleGen1:
         # for each unary function determine if it has an influence on the output of at least one examples, if not remove it
         for n in g.nodes.copy():
             if type(n) is FunctionNode and n.is_unary_image:  # unary function
-                if len(g.nodes) == 2 and g.nodes[1].name == 'rigid_0':  # allow graphs with single identify transform (rigid_0)
-                    break
+                if len(g.nodes) == 2 and g.nodes[1].name == "rigid_0":
+                    break  # allow graphs with single identify transform (rigid_0)
 
                 gc = g.copy()
                 nc = gc.get_node_by_id(n.id)
@@ -752,15 +753,18 @@ class SynthRiddleGen1:
 
         return g, output_node
 
-    def __check_ouputs(self, node: Node, outputs: CacheDict, prev_outputs: List[CacheDict]):
+    def __check_ouputs(self, node: Node, outputs: CacheDict, prev_outputs: List[CacheDict], max_out_size: Point):
         a = node.ancestors(include_self=True)
 
         input_image = outputs[0]
         output_image = outputs[node.id]
 
-        # input must differ from output
-        if input_image.mask == output_image.mask and (node.name != 'rigid_0' or len(a) != 2):   # allow identity (rigid_0)
+        if output_image.w > max_out_size.x or output_image.h > max_out_size.y:
             return False
+
+        # input must differ from output
+        if input_image.mask == output_image.mask and (node.name != "rigid_0" or len(a) != 2):
+            return False  # allow identity (rigid_0)
 
         if input_image.area < 4 or output_image.area < 1:
             return False
@@ -785,12 +789,17 @@ class SynthRiddleGen1:
         return True
 
     def __find_pair(
-        self, g: NodeGraph, node: Node, prev_outputs: List[CacheDict], max_tries: int = 100
+        self,
+        g: NodeGraph,
+        node: Node,
+        prev_outputs: List[CacheDict],
+        max_out_size: Point,
+        max_tries: int = 100,
     ) -> Tuple[Image, Image]:
         for trial in range(max_tries):
             input_image = self.input_sampler.next_composed_image(n=2)
             outputs = g.evaluate(input_image)
-            if self.__check_ouputs(node, outputs, prev_outputs):
+            if self.__check_ouputs(node, outputs, prev_outputs, max_out_size):
                 prev_outputs.append(outputs)
                 output_image = outputs[node.id]
                 return (input_image, output_image)
@@ -823,16 +832,18 @@ class SynthRiddleGen1:
             try:
                 g2 = NodeGraph.from_ancestors(node)
                 trainig_examples = [
-                    self.__find_pair(g2, node, example_outputs, max_tries=self.max_input_sample_tries)
+                    self.__find_pair(
+                        g2, node, example_outputs, max_out_size=self.max_out_size, max_tries=self.max_input_sample_tries
+                    )
                     for i in range(num_examples)
                 ]
 
-                #print("before NOP removal", g2.fmt())
+                # print("before NOP removal", g2.fmt())
                 g2, node = SynthRiddleGen1.remove_nops(g2, node, example_outputs, trainig_examples)
                 if node.depth < self.min_depth:
                     continue  # graph after pruning too shallow
 
-                #print("after NOP remoal", g2.fmt())
+                # print("after NOP remoal", g2.fmt())
                 return trainig_examples, g2, node
             except RuntimeError:
                 pass
