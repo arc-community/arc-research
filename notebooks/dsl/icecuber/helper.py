@@ -64,7 +64,7 @@ def show_function_outputs(fn_name, v, f):
 def load_func_examples():
     f = NodeFactory()
     register_functions(f)
-    with open("func_examples2.pkl", "rb") as file:
+    with open("func_examples.pkl", "rb") as file:
         data = pickle.load(file)
     
     func_examples = data["func_examples"]
