@@ -6,7 +6,7 @@ from arc.utils import dataset
 import random
 from functools import partial
 
-from image import (
+from riddle_synth.image import (
     Point,
     Image,
     center,

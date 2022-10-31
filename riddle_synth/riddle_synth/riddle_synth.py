@@ -8,8 +8,8 @@ import shutil
 from tqdm import tqdm
 from typing import List, Sequence, Tuple
 from arc.utils import dataset
-from node_graph import InputSampler, NodeFactory, SynthRiddleGen1, print_image, register_functions
-from image import Image
+from riddle_synth.node_graph import InputSampler, NodeFactory, SynthRiddleGen1, print_image, register_functions
+from riddle_synth.image import Image
 from dataclasses import dataclass
 
 PRODUCT_NAME = "riddle_synth"
