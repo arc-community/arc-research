@@ -1,0 +1,36 @@
+{
+    "seed": 98761254,
+    "num_riddles_to_generate": 100000,
+    "output_dir": "rigid_10x10_depth_1_100k",
+    "function_set": [
+        "rigid_1",
+        "rigid_2",
+        "rigid_3",
+        "rigid_4",
+        "rigid_5",
+        "rigid_6",
+        "rigid_7",
+        "rigid_8"
+    ],
+    "min_depth": 1,
+    "max_depth": 1,
+    "min_examples": 4,
+    "max_examples": 4,
+    "input_sampler": {
+        "subdirs": [
+            "training",
+            "evaluation"
+        ],
+        "color_permutation": true,
+        "random_offsets": true,
+        "add_noise_p": 0.05,
+        "noise_p": 0.25,
+        "add_parts_p": 0.2,
+        "parts_min": 0,
+        "parts_max": 2,
+        "min_width": 10,
+        "min_height": 10,
+        "max_width": 10,
+        "max_height": 10
+    }
+}
