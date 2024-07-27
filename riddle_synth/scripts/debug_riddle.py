@@ -2,8 +2,8 @@ import argparse
 import json
 from pathlib import Path
 from arc.utils.dataset import load_riddle_from_file
-from image import Image
-from node_graph import FunctionNode, InputNode, NodeFactory, NodeGraph, ParameterType, print_image, register_functions
+from riddle_synth.image import Image
+from riddle_synth.node_graph import FunctionNode, InputNode, NodeFactory, NodeGraph, ParameterType, print_image, register_functions
 
 
 def print_steps(board_pair, g):

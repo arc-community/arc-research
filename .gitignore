@@ -128,3 +128,5 @@ dmypy.json
 
 # Pyre type checker
 .pyre/
+riddle_synth/riddle_synth/output
+riddle_synth/riddle_synth/tmp/output/config

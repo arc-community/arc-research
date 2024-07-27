@@ -1,7 +1,7 @@
 from typing import List
 from arc.interface import Riddle, Board
 from arc.utils import dataset
-from image import (
+from riddle_synth.image import (
     Point,
     Image,
     compose_growing,
@@ -390,7 +390,7 @@ def main():
     print("pick_not_maxes")
     xs = pick_not_maxes([p1, p3, p4, p5], 4)
     print(len(xs))
-    
+
 
 if __name__ == "__main__":
     main()

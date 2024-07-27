@@ -1,7 +1,7 @@
 import random
 from arc.utils import dataset
-from node_graph import FunctionNode, InputSampler, NodeFactory, print_image, register_functions
-from image import split_all
+from riddle_synth.node_graph import FunctionNode, InputSampler, NodeFactory, print_image, register_functions
+from riddle_synth.image import split_all
 
 
 def main():
