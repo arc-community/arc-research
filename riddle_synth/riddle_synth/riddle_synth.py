@@ -10,7 +10,7 @@ from typing import List, Sequence, Tuple
 from arc.utils import dataset
 from node_graph import InputSampler, NodeFactory, SynthRiddleGen1, print_image, register_functions
 from image import Image
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 PRODUCT_NAME = "riddle_synth"
 PRODUCT_VERSION = (0, 1)
@@ -49,7 +49,7 @@ class RiddleSynthConfiguration:
     max_examples: int = 7
     sample_node_count: int = 10
     max_input_sample_tries: int = 100
-    input_sampler: InputSamplerConfiguration = InputSamplerConfiguration()
+    input_sampler: InputSamplerConfiguration = field(default_factory=InputSamplerConfiguration)
 
 
 def read_section(data: dict, config_type: type = RiddleSynthConfiguration) -> object:
