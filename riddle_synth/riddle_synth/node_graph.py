@@ -1,76 +1,26 @@
 from __future__ import annotations
+
+import random
 from abc import ABC, abstractmethod
 from enum import Enum
-from typing import Dict, List, Sequence, Set, Tuple, Union
-from arc.utils import dataset
-import random
 from functools import partial
-
-from .image import (
-    Point,
-    Image,
-    center,
-    color_shape_const,
-    compose_growing,
-    compress2,
-    compress3,
-    connect,
-    count,
-    cut_image,
-    embed,
-    empty,
-    erase_color,
-    filter_color,
-    filter_color_palette,
-    get_pos,
-    get_size,
-    get_size0,
-    gravity,
-    half,
-    hull,
-    hull0,
-    inside_marked,
-    majority_color_image,
-    make_border,
-    make_border2,
-    move,
-    my_stack_list,
-    pick_max,
-    pick_maxes,
-    pick_not_maxes,
-    pick_unique,
-    smear,
-    split_columns,
-    split_rows,
-    spread_colors,
-    stack_line,
-    split_colors,
-    filter_color,
-    broadcast,
-    compress,
-    fill,
-    border,
-    interior,
-    interior2,
-    rigid,
-    get_regular,
-    sub_image,
-    to_origin,
-    wrap,
-    extend,
-    outer_product_is,
-    outer_product_si,
-    replace_colors,
-    repeat,
-    mirror,
-    split_all,
-    compose,
-    compose_list,
-    Pos,
-)
+from typing import Dict, List, Sequence, Set, Tuple, Union
 
 import typer
+from arc.utils import dataset
 
+from .image import (Image, Point, Pos, border, broadcast, center,
+                    color_shape_const, compose, compose_growing, compose_list,
+                    compress, compress2, compress3, connect, count, cut_image,
+                    embed, empty, erase_color, extend, fill, filter_color,
+                    filter_color_palette, get_pos, get_regular, get_size,
+                    get_size0, gravity, half, hull, hull0, inside_marked,
+                    interior, interior2, majority_color_image, make_border,
+                    make_border2, mirror, move, my_stack_list,
+                    outer_product_is, outer_product_si, pick_max, pick_maxes,
+                    pick_not_maxes, pick_unique, repeat, replace_colors, rigid,
+                    smear, split_all, split_colors, split_columns, split_rows,
+                    spread_colors, stack_line, sub_image, to_origin, wrap)
 
 CacheDict = Dict[int, Union[Image, List[Image]]]
 

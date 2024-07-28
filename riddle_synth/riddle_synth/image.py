@@ -1,9 +1,10 @@
 from __future__ import annotations
-from typing import Callable, Iterable, Tuple, List, overload
+
 from functools import cmp_to_key
+from typing import Callable, Iterable, List, Tuple, overload
+
 import numpy as np
 from arc.interface import Board
-
 
 MAXSIDE = 100
 MAXAREA = 40 * 40

@@ -31,13 +31,13 @@ def display_transformations(graph, input_image, intermediate_results):
 
 
 # Load the graph data
-graph_data = json.load(open("./output/graphs/30b5cf65.graph.json"))
+graph_data = json.load(open("/private/tmp/outputs/graphs/9e3fae94.graph.json"))
 f = NodeFactory()
 register_functions(f)
 ng = NodeGraph.deserialize(f, graph_data)
 
 # Load the input image
-riddle = dataset.load_riddle_from_file('./output/30b5cf65.json')
+riddle = dataset.load_riddle_from_file('/private/tmp/outputs/9e3fae94.json')
 inp, out = riddle.train[0].input, riddle.train[0].output
 input_image = Image.from_board(inp)
 

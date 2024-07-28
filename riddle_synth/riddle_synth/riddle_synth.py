@@ -1,16 +1,19 @@
-from collections import OrderedDict
-import dataclasses
-from pathlib import Path
-import random
-import json
 import argparse
+import dataclasses
+import json
+import random
 import shutil
-from tqdm import tqdm
-from typing import List, Sequence, Tuple
-from arc.utils import dataset
-from .node_graph import InputSampler, NodeFactory, SynthRiddleGen1, print_image, register_functions
-from .image import Image
+from collections import OrderedDict
 from dataclasses import dataclass, field
+from pathlib import Path
+from typing import List, Sequence, Tuple
+
+from arc.utils import dataset
+from tqdm import tqdm
+
+from .image import Image
+from .node_graph import (InputSampler, NodeFactory, SynthRiddleGen1,
+                         print_image, register_functions)
 
 PRODUCT_NAME = "riddle_synth"
 PRODUCT_VERSION = (0, 1)

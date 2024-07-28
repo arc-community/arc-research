@@ -1,0 +1,29 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "riddle_synth"
+version = "0.1"
+authors = [
+    {name = "arc-community"},
+]
+description = "A package for riddle synthesis"
+readme = "README.md"
+requires-python = ">=3.7"
+dependencies = [
+    "numpy",
+]
+
+[project.optional-dependencies]
+dev = [
+    "black",
+    "pytest",
+]
+
+[project.scripts]
+riddle-synth = "riddle_synth.riddle_synth:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["riddle_synth*"]
